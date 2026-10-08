@@ -1,0 +1,12 @@
+# Lower bounds only. Further packages are added as later phases need them.
+pydantic>=2.11
+PyYAML>=6.0
+pandas>=2.1
+numpy>=1.26
+duckdb>=1.1
+statsmodels>=0.14
+lifelines>=0.29
+fastapi>=0.110
+uvicorn>=0.29
+pytest>=8.0
+httpx2>=2.0       # used by FastAPI's test client

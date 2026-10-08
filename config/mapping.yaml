@@ -1,0 +1,52 @@
+# Binds the physical tables of one dataset to the logical roles the engine uses.
+# The engine never names a table or column itself; it reads them from here.
+# Table and column names must be plain identifiers (letters, digits,
+# underscores). Tables may be qualified as schema.table or catalog.schema.table.
+
+dataset: my_study
+
+backend:
+  dialect: duckdb
+  database: ../data/cohort.duckdb   # relative to this file
+
+person:
+  table: master_patient
+  id: patient_id
+  birth_date: date_of_birth
+  attributes: [ethnicity, gender, residence_status]
+
+# coverage: the dates a table is complete for. Patients whose look-back or
+# follow-up window falls outside it are excluded, because missing data there
+# would read as "no events". Leave a bound out if the table is complete in
+# that direction.
+
+condition:
+  label: Chronic conditions
+  table: chronic_conditions
+  id: patient_id
+  concept: condition_name
+  date: diagnosis_year          # the year as a number
+  granularity: year
+  coverage: { end: 2025-12-31 } # holds every diagnosis ever made, up to the extract
+
+sources:
+  - name: ed_episodes
+    label: ED attendances
+    table: ed_episodes
+    id: patient_id
+    date: attendance_date
+    granularity: day
+    coverage: { start: 2018-01-01, end: 2025-12-31 }
+    dimensions:
+      mode_of_arrival: { label: "Mode of arrival", values: auto }
+      triage_level:    { label: "Triage acuity",   values: auto }
+      disposition:     { label: "Disposition",     values: auto }
+    measures:
+      los_hours: { label: "Length of stay (hours)", agg: [mean, sum, max] }
+
+exposure:
+  - name: program_a
+    label: Programme A
+    table: program_members
+    id: patient_id
+    index_date: enrollment_date
