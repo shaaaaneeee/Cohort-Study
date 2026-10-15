@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Northflank sandbox</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 720px; margin: 32px auto; padding: 0 16px; color: #111; background: #f5f5f5; }
+    section { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    h1 { font-size: 22px; } h2 { font-size: 16px; margin: 0 0 8px; }
+    button { font: inherit; padding: 6px 12px; border-radius: 4px; border: 1px solid #888; background: #fff; cursor: pointer; }
+    pre { background: #f0f0ee; padding: 8px; border-radius: 4px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; }
+    input { font: inherit; padding: 6px; width: 60%; }
+  </style>
+  <script src="config.js"></script>
+</head>
+<body>
+  <h1>Northflank sandbox</h1>
+  <p>Backend: <code id="backend"></code></p>
+
+  <section><h2>1. Backend health</h2><button data-get="/health">Check</button><pre></pre></section>
+  <section><h2>2. Database connection</h2><button data-get="/api/db">Check</button><pre></pre></section>
+  <section>
+    <h2>3. Write and read the database</h2>
+    <input id="note" placeholder="A note to save"> <button id="save">Save</button>
+    <button data-get="/api/notes">List notes</button><pre></pre>
+  </section>
+  <section><h2>4. Secret (fingerprint only, never the value)</h2><button data-get="/api/secret-check">Check</button><pre></pre></section>
+  <section><h2>5. Test error (then find it in the logs)</h2><button data-get="/api/error">Trigger</button><pre></pre></section>
+
+  <script>
+    const base = (window.CONFIG && window.CONFIG.BACKEND_URL || "").replace(/\/$/, "");
+    document.getElementById("backend").textContent = base || "(BACKEND_URL not set)";
+
+    async function call(path, out, options) {
+      out.textContent = "…";
+      try {
+        const r = await fetch(base + path, options);
+        const body = await r.text();
+        const id = r.headers.get("X-Request-ID");
+        out.textContent = `${r.status}${id ? "  request id " + id : ""}\n${body}`;
+      } catch (e) {
+        out.textContent = "Request failed: " + e.message;
+      }
+    }
+    for (const b of document.querySelectorAll("[data-get]")) {
+      b.addEventListener("click", () => call(b.dataset.get, b.parentElement.querySelector("pre")));
+    }
+    document.getElementById("save").addEventListener("click", (e) => {
+      call("/api/notes", e.target.parentElement.querySelector("pre"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: document.getElementById("note").value }),
+      });
+    });
+  </script>
+</body>
+</html>
