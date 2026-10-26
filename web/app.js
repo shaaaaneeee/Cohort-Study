@@ -1,10 +1,11 @@
 // The study builder. Holds the study being edited, talks to the API and
-// draws steps 1 and 2. results.js draws step 3.
+// draws steps 1 and 2. chat.js draws step 0, results.js step 3.
 //
 // The study object has exactly the shape of StudySpec in features.py, so it
 // can be sent to the API, saved to a file and opened again unchanged.
 import { el, formatCount, formatNumber, issueItems, numberTable, readable } from "./dom.js";
-import { renderResults, renderResultsError, setResultsBusy } from "./results.js";
+import { redrawResults, renderResults, renderResultsError, setResultsBusy } from "./results.js";
+import { startChat } from "./chat.js";
 
 const STORAGE_KEY = "cohort-studio:study";
 // Columns the analysis table always has; a feature cannot take these names.
@@ -32,6 +33,10 @@ const state = {
   values: new Map(),  // "source/dimension" -> promise of its values
   issues: [],         // the latest design check
   editing: null,      // {role, index} while the feature dialog is open
+  step: "ask",        // the step on screen
+  counts: null,       // {treated, control} after the last eligibility step
+  lastRun: null,      // {study: JSON, at: Date} of the result on screen
+  chat: { draft: false },  // what the assistant has done, from chat.js
 };
 
 const $ = (id) => document.getElementById(id);
@@ -122,6 +127,11 @@ function studyChanged() {
   scheduleCheck();
 }
 
+// Whether the result on screen came from the study as it is now.
+function resultsCurrent() {
+  return state.lastRun !== null && state.lastRun.study === JSON.stringify(state.study);
+}
+
 function sourceOf(name) {
   return state.meta.sources.find((s) => s.name === name) || null;
 }
@@ -167,26 +177,102 @@ async function checkStudy() {
   renderAttrition(attrition);
 }
 
+// The step where an issue can be fixed, from the role of its feature.
+function stepFor(issue) {
+  const feature = issue.feature && state.study.features.find((f) => f.name === issue.feature);
+  if (feature && feature.role === "inclusion") return ["cohort", "Fix in Cohort"];
+  if (feature || issue.code === "outcome_count") return ["features", "Fix in Covariates and outcome"];
+  return ["cohort", "Review in Cohort"];
+}
+
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+// The design check in the sidebar. It leads the sidebar because it decides
+// whether the study can run: errors frame it in red and turn Run off.
 function renderIssues() {
-  const list = $("issues");
-  if (state.issues.length === 0) {
-    list.replaceChildren(el("li", { class: "ok" }, "No problems found."));
+  const errors = state.issues.filter((i) => i.level === "error").length;
+  const warnings = state.issues.length - errors;
+  const empty = state.study.features.length === 0;
+  const current = resultsCurrent();
+  let view;
+  if (empty) {
+    view = ["empty", "No study yet", "Ask a question, open a study file, or add features in steps 1 and 2.",
+      "Run analysis turns on once a study is drafted and passes the check."];
+  } else if (errors) {
+    view = ["errors", `${plural(errors, "error")} ${errors === 1 ? "blocks" : "block"} running`, "Fix these, then run.",
+      "Run analysis is off until the errors are fixed. Warnings do not block it."];
+  } else if (current) {
+    const at = state.lastRun.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    view = ["ran", "Results are up to date", `Run at ${at}${warnings ? ` · ${plural(warnings, "warning")}` : ""}`,
+      "Change anything in steps 1 or 2 and these results go out of date."];
   } else {
-    list.replaceChildren(...issueItems(state.issues, featureLabel));
+    view = ["ready", "Ready to run", `No errors${warnings ? ` · ${plural(warnings, "warning")}` : ""}`,
+      "The assistant only drafts. Nothing runs until you press Run analysis."];
   }
+  const [name, title, sub, foot] = view;
+  $("check-card").dataset.state = name;
+  $("check-title").textContent = title;
+  $("check-sub").textContent = sub;
+  $("run-foot").textContent = foot;
+
+  const items = [];
+  for (const issue of empty ? [] : state.issues) {
+    const [step, link] = stepFor(issue);
+    const label = issue.feature ? `${featureLabel(issue.feature)}: ` : "";
+    items.push(el("li", {},
+      el("span", { class: `badge badge-${issue.level}` }, issue.level === "error" ? "Error" : "Warning"),
+      `${label}${issue.message}`,
+      el("button", { type: "button", class: "link", onclick: () => showStep(step) }, link)));
+  }
+  $("issues").replaceChildren(...items);
+  $("issues").hidden = items.length === 0;
   // An analysis with design errors would be refused, so do not offer it.
-  $("run").disabled = state.issues.some((i) => i.level === "error");
+  $("run").disabled = empty || errors > 0;
+  $("run").textContent = current ? "Run again" : "Run analysis";
+  $("features-next").textContent = errors ? "Next: fix the design check, then Run analysis →"
+    : empty ? "" : "Next: Run analysis, in the sidebar →";
+  renderSteps();
 }
 
 function renderModel(model) {
-  $("model-name").textContent = model ? model.name : "Set an outcome to see which model will be used.";
-  $("model-reason").textContent = model ? model.reason : "";
+  $("model-name").textContent = model ? model.name : "Not set yet";
+  $("model-reason").textContent = model ? model.reason : "Chosen from the outcome once it is set.";
+}
+
+// The step bar: a status disc and one line under each step.
+function renderSteps() {
+  const order = ["ask", "cohort", "features", "results"];
+  const errors = state.issues.filter((i) => i.level === "error").length;
+  const empty = state.study.features.length === 0;
+  const outcomes = state.study.features.filter((f) => f.role === "outcome").length;
+  const adjustments = state.study.person_covariates.length +
+    state.study.features.filter((f) => f.role === "covariate").length;
+  const subs = {
+    ask: state.chat.draft ? "Draft ready" : "Describe your study",
+    cohort: state.counts ? `${formatCount(state.counts.treated)} treated · ${formatCount(state.counts.control)} controls` : "Counting…",
+    features: empty ? "Nothing added yet" : errors ? `${plural(errors, "error")} to fix`
+      : `${plural(adjustments, "adjustment")} · ${plural(outcomes, "outcome")}`,
+    results: state.lastRun === null ? "Not run yet" : resultsCurrent()
+      ? `Run at ${state.lastRun.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Out of date",
+  };
+  const here = order.indexOf(state.step);
+  order.forEach((name, i) => {
+    let status = i < here ? "done" : "todo";
+    if (name === "features" && errors && !empty) status = "error";
+    if (i === here) status = "current";
+    if (name === "results" && status === "done" && !resultsCurrent()) status = "todo";
+    $(`tab-${name}`).dataset.status = status;
+    $(`sub-${name}`).textContent = subs[name];
+  });
 }
 
 function renderAttrition(result) {
   const body = $("attrition");
   if (result.status === "rejected") {
     body.replaceChildren();
+    state.counts = null;
     $("count-treated").textContent = "–";
     $("count-control").textContent = "–";
     const message = result.reason.issues.length
@@ -194,26 +280,32 @@ function renderAttrition(result) {
       : `Counts are not available: ${result.reason.message}`;
     $("attrition-note").textContent = message;
     $("count-note").textContent = message;
+    renderSteps();
     return;
   }
 
   const { steps, issues } = result.value;
+  // Each count is drawn as a bar against the first step's count.
+  const bar = (n, first, group) => el("div", { class: "bar-cell" }, formatCount(n),
+    el("span", { class: "bar" }, el("span", { class: group, style: `width:${first ? Math.round(n / first * 100) : 0}%` })));
   const rows = [];
-  for (const step of steps) {
-    rows.push(el("tr", {}, el("td", {}, step.step),
-      el("td", {}, formatCount(step.treated)), el("td", {}, formatCount(step.control))));
-  }
+  steps.forEach((step, i) => {
+    rows.push(el("tr", { class: i === steps.length - 1 ? "last-step" : null }, el("td", {}, step.step),
+      el("td", {}, bar(step.treated, steps[0].treated, "treated")),
+      el("td", {}, bar(step.control, steps[0].control, "control"))));
+  });
   body.replaceChildren(...rows);
   const last = steps[steps.length - 1];
+  state.counts = { treated: last.treated, control: last.control };
   $("count-treated").textContent = formatCount(last.treated);
   $("count-control").textContent = formatCount(last.control);
 
   const small = issues.filter((i) => i.code === "small_cell").length;
-  const note = small
+  $("attrition-note").textContent = small
     ? `${small} of these counts are below the suppression threshold of 5. Do not share them as they are.`
-    : "";
-  $("attrition-note").textContent = note;
+    : "Matching will pair each treated patient with one control from this pool.";
   $("count-note").textContent = small ? "Some counts are below 5; see the table in step 1." : "After every eligibility step.";
+  renderSteps();
 }
 
 
@@ -282,24 +374,35 @@ function renderPersonCovariates() {
 // ---------------------------------------------- the lists of features
 
 function renderFeatureLists() {
+  const empty = { inclusion: "No criteria: everyone in the person table is eligible.",
+                  covariate: "No covariates yet. Without any, the groups are compared without matching.",
+                  outcome: null };
   for (const role of ["inclusion", "covariate", "outcome"]) {
     const items = [];
     state.study.features.forEach((f, index) => {
       if (f.role !== role) return;
       const issues = state.issues.filter((i) => i.feature === f.name);
-      items.push(el("li", { class: "feature" },
+      const hasError = issues.some((i) => i.level === "error");
+      items.push(el("li", { class: `feature${hasError ? " has-error" : ""}` },
+        role === "inclusion" ? el("span", { class: "feature-num" }, String(items.length + 1)) : null,
         el("div", { class: "feature-text" },
           el("div", { class: "feature-title" }, f.label),
           el("div", { class: "feature-description" }, describe(f)),
           issues.length ? el("ul", { class: "issues" }, ...issueItems(issues)) : null),
-        el("button", { type: "button", class: "link", "aria-label": `Edit ${f.label}`,
-          onclick: () => openFeature(role, index) }, "Edit"),
-        el("button", { type: "button", class: "link", "aria-label": `Remove ${f.label}`,
-          onclick: () => removeFeature(index) }, "Remove")));
+        el("span", { class: "feature-actions" },
+          el("button", { type: "button", class: "quiet", "aria-label": `Edit ${f.label}`,
+            onclick: () => openFeature(role, index) }, "Edit"),
+          el("button", { type: "button", class: "quiet ghost", "aria-label": `Remove ${f.label}`,
+            onclick: () => removeFeature(index) }, "Remove"))));
     });
+    if (!items.length && empty[role]) items.push(el("li", { class: "empty-list" }, empty[role]));
     $(`list-${role}`).replaceChildren(...items);
+    const counter = $(`count-${role}`);
+    if (counter) counter.textContent = String(state.study.features.filter((f) => f.role === role).length);
   }
-  $("add-outcome").hidden = state.study.features.some((f) => f.role === "outcome");
+  const missing = !state.study.features.some((f) => f.role === "outcome");
+  $("add-outcome-box").hidden = !missing;
+  $("outcome-card").classList.toggle("missing", missing);
 }
 
 function removeFeature(index) {
@@ -427,6 +530,7 @@ function openFeature(role, index = null) {
   const f = existing ? structuredClone(existing) : defaultFeature(role);
 
   $("feature-title").textContent = `${existing ? "Edit" : "New"} ${ROLE_NAMES[role]}`;
+  $("feature-role").textContent = existing ? `${ROLE_NAMES[role]} · ${existing.label}` : ROLE_NAMES[role];
   $("f-label").value = f.label;
   const sourceSelect = $("f-source");
   sourceSelect.replaceChildren();
@@ -628,7 +732,9 @@ async function runAnalysis() {
   setResultsBusy(true);
   try {
     const result = await api("/api/analysis", state.study);
-    renderResults(result, structuredClone(state.study));
+    state.lastRun = { study: JSON.stringify(state.study), at: new Date() };
+    const exposure = state.meta.exposures.find((x) => x.name === state.study.exposure);
+    renderResults(result, structuredClone(state.study), exposure ? exposure.label : state.study.exposure);
   } catch (error) {
     renderResultsError(error);
   } finally {
@@ -661,18 +767,48 @@ function showBanner(message) {
   banner.hidden = false;
 }
 
+const STEPS = ["ask", "cohort", "features", "results"];
+
 function showStep(step) {
-  for (const name of ["cohort", "features", "results"]) {
+  state.step = step;
+  for (const name of STEPS) {
     $(`tab-${name}`).setAttribute("aria-selected", String(name === step));
     $(`panel-${name}`).hidden = name !== step;
   }
+  renderSteps();
+  window.scrollTo({ top: 0 });
+}
+
+// The theme follows the system until the user picks one, which is kept.
+const THEME_KEY = "cohort-studio:theme";
+
+function currentTheme() {
+  const set = document.documentElement.dataset.theme;
+  if (set) return set;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme(theme) {
+  if (theme) document.documentElement.dataset.theme = theme;
+  $("theme-toggle").textContent = currentTheme() === "dark" ? "Light theme" : "Dark theme";
+  redrawResults();
+}
+
+function toggleTheme() {
+  const next = currentTheme() === "dark" ? "light" : "dark";
+  try {
+    localStorage.setItem(THEME_KEY, next);
+  } catch {
+    // Kept for this page only.
+  }
+  applyTheme(next);
 }
 
 
 // ------------------------------------------------------------- start
 
 function wireEvents() {
-  for (const name of ["cohort", "features", "results"]) {
+  for (const name of STEPS) {
     $(`tab-${name}`).addEventListener("click", () => showStep(name));
   }
   $("exposure").addEventListener("change", (e) => {
@@ -721,6 +857,12 @@ function wireEvents() {
   }
   $("f-preview-button").addEventListener("click", previewFeature);
   $("f-cancel").addEventListener("click", () => $("feature-dialog").close());
+  $("f-close").addEventListener("click", () => $("feature-dialog").close());
+  for (const button of document.querySelectorAll("[data-go]")) {
+    button.addEventListener("click", () => showStep(button.dataset.go));
+  }
+  $("theme-toggle").addEventListener("click", toggleTheme);
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => applyTheme(null));
   $("feature-form").addEventListener("submit", saveFeature);
   $("feature-dialog").addEventListener("close", () => {
     state.editing = null;
@@ -728,7 +870,14 @@ function wireEvents() {
 }
 
 async function start() {
+  let theme = null;
+  try {
+    theme = localStorage.getItem(THEME_KEY);
+  } catch {
+    theme = null;
+  }
   wireEvents();
+  applyTheme(theme);
   try {
     state.meta = await api("/api/metadata");
   } catch (error) {
@@ -737,6 +886,21 @@ async function start() {
   }
   $("dataset").textContent = state.meta.dataset;
   setStudy(loadDraft() || newStudy());
+  renderIssues();
+  startChat({
+    api,
+    describe,
+    onChange: (summary) => {
+      state.chat = summary;
+      renderSteps();
+    },
+    exposureLabel: (name) => (state.meta.exposures.find((x) => x.name === name) || { label: name }).label,
+    review: (study) => {
+      if (state.study.features.length && !window.confirm("Replace the study in the builder with the drafted one?")) return;
+      setStudy(study);
+      showStep("cohort");
+    },
+  });
 }
 
 start();

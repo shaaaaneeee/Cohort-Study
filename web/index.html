@@ -11,183 +11,290 @@
 </head>
 <body>
   <header class="top">
-    <h1>cohort-studio <span id="dataset" class="muted"></span></h1>
-    <div class="actions">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Cohort Studio</div>
+    <div class="dataset"><span class="eyebrow">Dataset</span><span id="dataset"></span></div>
+    <nav class="actions" aria-label="Study file">
+      <button type="button" id="theme-toggle" class="ghost"></button>
       <button type="button" id="new-study">New study</button>
-      <button type="button" id="save-study">Save study file</button>
       <button type="button" id="open-study">Open study file</button>
+      <button type="button" id="save-study">Save study file</button>
       <input type="file" id="open-study-file" accept=".json,application/json" hidden>
-    </div>
+    </nav>
   </header>
 
   <p id="load-error" class="banner" role="alert" hidden></p>
 
-  <nav class="steps" role="tablist" aria-label="Steps">
-    <button type="button" role="tab" id="tab-cohort" aria-controls="panel-cohort" aria-selected="true">1 Cohort</button>
-    <button type="button" role="tab" id="tab-features" aria-controls="panel-features" aria-selected="false">2 Covariates and outcome</button>
-    <button type="button" role="tab" id="tab-results" aria-controls="panel-results" aria-selected="false">3 Results</button>
+  <nav class="steps" role="tablist" aria-label="Study steps">
+    <button type="button" role="tab" id="tab-ask" aria-controls="panel-ask" aria-selected="true">
+      <span class="disc">0</span><span class="step-text"><span class="step-label">Ask</span><span class="step-sub" id="sub-ask"></span></span></button>
+    <button type="button" role="tab" id="tab-cohort" aria-controls="panel-cohort" aria-selected="false">
+      <span class="disc">1</span><span class="step-text"><span class="step-label">Cohort</span><span class="step-sub" id="sub-cohort"></span></span></button>
+    <button type="button" role="tab" id="tab-features" aria-controls="panel-features" aria-selected="false">
+      <span class="disc">2</span><span class="step-text"><span class="step-label">Covariates and outcome</span><span class="step-sub" id="sub-features"></span></span></button>
+    <button type="button" role="tab" id="tab-results" aria-controls="panel-results" aria-selected="false">
+      <span class="disc">3</span><span class="step-text"><span class="step-label">Results</span><span class="step-sub" id="sub-results"></span></span></button>
   </nav>
 
   <div class="layout">
     <main>
+      <!-- Step 0 -->
+      <section id="panel-ask" role="tabpanel" aria-labelledby="tab-ask">
+        <div class="ask">
+          <div class="ask-intro" id="ask-intro">
+            <span class="eyebrow">Step 0 · Ask</span>
+            <h1>What do you want to find out?</h1>
+            <p>Describe a study in plain English. The assistant drafts it, you review every part in
+              the builder, and nothing runs until you press Run analysis.</p>
+          </div>
+
+          <div class="thread-head" id="thread-head" hidden>
+            <span class="eyebrow">Step 0 · Ask</span>
+            <button type="button" id="chat-reset" class="link">Start over</button>
+          </div>
+
+          <ol id="chat-log" class="chat-log" aria-live="polite"></ol>
+
+          <form id="chat-form" class="composer">
+            <label for="chat-input" class="eyebrow" hidden>Your question or answer</label>
+            <textarea id="chat-input" rows="3" maxlength="20000"
+              placeholder="Describe your study, e.g. which programme, which outcome, over what time…"></textarea>
+            <div class="composer-foot">
+              <span class="hint" id="composer-hint">Enter to send · Shift+Enter for a new line</span>
+              <button type="submit" id="chat-send" class="primary plain">Send</button>
+            </div>
+          </form>
+
+          <div id="ask-examples" class="examples">
+            <span class="eyebrow">Start from an example</span>
+            <div class="example-grid">
+              <button type="button" class="example" data-example="Does Programme A reduce ED attendances in the 12 months after enrolment, adjusting for prior ED use, age and gender?">
+                <span class="example-text"><span class="example-kind">Complete question</span>Does Programme A reduce ED attendances in the 12 months after enrolment, adjusting for prior ED use, age and gender?</span></button>
+              <button type="button" class="example" data-example="Does Programme A help patients?">
+                <span class="example-text"><span class="example-kind">Needs clarifying</span>Does Programme A help patients?</span></button>
+              <button type="button" class="example" data-example="Does Programme A reduce mortality?">
+                <span class="example-text"><span class="example-kind">Not in this dataset</span>Does Programme A reduce mortality?</span></button>
+            </div>
+            <ol class="how">
+              <li><span class="num">1</span><span><strong>You ask</strong>In plain English</span></li>
+              <li><span class="num">2</span><span><strong>The assistant drafts</strong>Cohort, covariates, outcome</span></li>
+              <li><span class="num">3</span><span><strong>You review</strong>Every rule, in the builder</span></li>
+              <li><span class="num">4</span><span><strong>You run</strong>Only when the check passes</span></li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
       <!-- Step 1 -->
-      <section id="panel-cohort" role="tabpanel" aria-labelledby="tab-cohort">
+      <section id="panel-cohort" role="tabpanel" aria-labelledby="tab-cohort" hidden>
+        <div class="page-head">
+          <span class="eyebrow">Step 1 · Cohort</span>
+          <h1>Who is in the study</h1>
+          <p>Check each rule and watch how many patients are left.</p>
+        </div>
+
         <div class="card">
-          <h2>Treatment group</h2>
-          <label class="field">Programme <select id="exposure"></select></label>
-          <p class="hint">Members are indexed on their enrolment date. Every other patient is a
-            potential control and is given the enrolment date of a randomly chosen member, so both
-            groups are compared over the same calendar period.</p>
+          <div class="grid-fields">
+            <label class="field">Programme (treatment group) <select id="exposure"></select>
+              <span class="hint">Index date: date of enrolment</span></label>
+            <div class="field">Age at index date
+              <div class="row">
+                <input id="age-min" type="number" min="0" max="120" aria-label="Youngest age">
+                <span class="unit">to</span>
+                <input id="age-max" type="number" min="0" max="120" aria-label="Oldest age">
+                <span class="unit">years</span>
+              </div>
+            </div>
+          </div>
+          <p class="hint">Every other patient is a potential control and is given the enrolment date of a
+            randomly chosen member, so both groups are compared over the same calendar period.</p>
           <details>
-            <summary>Random seed</summary>
-            <label class="field">Seed <input id="seed" type="number" min="0" step="1"></label>
-            <p class="hint">Fixes the random draws (control index dates, matching order), so the same
-              study always gives the same result.</p>
+            <summary>Random seed (fixes the random draws, so the same study always gives the same result)</summary>
+            <label class="field" style="margin-top:12px">Seed <input id="seed" type="number" min="0" step="1"></label>
           </details>
         </div>
 
         <div class="card">
-          <h2>Age at index date</h2>
-          <div class="row">
-            <label class="field">From <input id="age-min" type="number" min="0" max="120"></label>
-            <label class="field">to <input id="age-max" type="number" min="0" max="120"></label>
+          <div class="row" style="justify-content:space-between">
+            <h2>Patient characteristics</h2>
+            <span class="hint">Tick values to keep only those patients. Nothing ticked means everyone.</span>
           </div>
-        </div>
-
-        <div class="card">
-          <h2>Patient characteristics</h2>
-          <p class="hint">Tick values to keep only those patients. Nothing ticked means everyone.</p>
           <div id="person-filters" class="filter-groups"></div>
         </div>
 
-        <div class="card">
-          <h2>Inclusion criteria</h2>
-          <p class="hint">Conditions on a patient's history before the index date, applied to both groups.</p>
+        <div class="card flush">
+          <div class="card-head">
+            <h2>Inclusion criteria <span class="count" id="count-inclusion"></span></h2>
+            <button type="button" class="small" data-add="inclusion">+ Add criterion</button>
+          </div>
           <ul id="list-inclusion" class="feature-list"></ul>
-          <button type="button" data-add="inclusion">Add criterion</button>
+          <p class="card-foot hint">Conditions on a patient's history before the index date, applied to both groups.</p>
         </div>
 
-        <div class="card">
-          <h2>Patients left after each step</h2>
-          <table class="numbers">
-            <thead><tr><th scope="col">Step</th><th scope="col">Treated</th><th scope="col">Controls</th></tr></thead>
-            <tbody id="attrition"></tbody>
-          </table>
-          <p id="attrition-note" class="hint"></p>
+        <div class="card flush">
+          <div class="card-head"><h2>Patients left after each step</h2></div>
+          <div class="table-scroll">
+            <table class="numbers">
+              <thead><tr><th scope="col">Step</th>
+                <th scope="col"><span class="key key-treated"></span>Treated</th>
+                <th scope="col"><span class="key key-control"></span>Controls</th></tr></thead>
+              <tbody id="attrition"></tbody>
+            </table>
+          </div>
+          <p id="attrition-note" class="card-foot hint">Matching will pair each treated patient with one control from this pool.</p>
+        </div>
+
+        <div class="step-nav">
+          <button type="button" class="ghost" data-go="ask">← Back to Ask</button>
+          <button type="button" class="primary" data-go="features">Next: Covariates and outcome</button>
         </div>
       </section>
 
       <!-- Step 2 -->
       <section id="panel-features" role="tabpanel" aria-labelledby="tab-features" hidden>
+        <div class="page-head">
+          <span class="eyebrow">Step 2 · Covariates and outcome</span>
+          <h1>What to adjust for, and what to measure</h1>
+          <p>Covariates are measured before the index date and used for matching. The outcome is measured after it.</p>
+        </div>
+
         <div class="card">
-          <h2>Adjust for patient characteristics</h2>
+          <h2>Person covariates</h2>
           <div id="person-covariates" class="checks"></div>
         </div>
 
-        <div class="card">
-          <h2>Covariates</h2>
-          <p class="hint">What to balance the groups on: each patient's history before the index date.</p>
+        <div class="card flush">
+          <div class="card-head">
+            <h2>Covariates <span class="count" id="count-covariate"></span></h2>
+            <button type="button" class="small" data-add="covariate">+ Add covariate</button>
+          </div>
           <ul id="list-covariate" class="feature-list"></ul>
-          <button type="button" data-add="covariate">Add covariate</button>
         </div>
 
-        <div class="card">
-          <h2>Outcome</h2>
-          <p class="hint">What happens after the index date. A study has one outcome.</p>
+        <div class="card flush" id="outcome-card">
+          <div class="card-head"><h2>Outcome <span class="count">exactly one</span></h2></div>
+          <div class="outcome-missing" id="add-outcome-box">
+            <span class="badge badge-error">Error</span>
+            <span><strong>No outcome chosen</strong><span class="hint">Choose the one thing to measure after the index date.</span></span>
+            <button type="button" class="primary plain" data-add="outcome" id="add-outcome">Choose outcome</button>
+          </div>
           <ul id="list-outcome" class="feature-list"></ul>
-          <button type="button" data-add="outcome" id="add-outcome">Set outcome</button>
+        </div>
+
+        <div class="step-nav">
+          <button type="button" class="ghost" data-go="cohort">← Back to Cohort</button>
+          <span class="hint" id="features-next"></span>
         </div>
       </section>
 
       <!-- Step 3 -->
       <section id="panel-results" role="tabpanel" aria-labelledby="tab-results" hidden>
-        <p id="results-empty" class="card">Run the analysis to see results here.</p>
+        <div class="page-head" id="results-empty">
+          <span class="eyebrow">Step 3 · Results</span>
+          <h1>Not run yet</h1>
+          <p>Press Run analysis once the design check passes. The answer comes first, then whether you can trust it, then the detail.</p>
+        </div>
         <div id="results" hidden></div>
       </section>
     </main>
 
-    <aside class="sidebar" aria-label="Study summary">
-      <div class="card">
-        <h2>Cohort</h2>
+    <aside class="sidebar" aria-label="Study status">
+      <section class="check-card" id="check-card" data-state="empty">
+        <div class="check-head">
+          <span class="eyebrow">Design check</span>
+          <span class="check-title" id="check-title">No study yet</span>
+          <span class="check-sub" id="check-sub">Ask a question or open a study file.</span>
+        </div>
+        <ul id="issues" class="issues" aria-live="polite"></ul>
+        <div class="check-foot">
+          <button type="button" id="run" class="primary">Run analysis</button>
+          <span class="hint" id="run-foot">The assistant only drafts. Nothing runs until you press Run analysis.</span>
+        </div>
+      </section>
+
+      <section class="side-card">
+        <span class="eyebrow">Cohort before matching</span>
         <div class="tiles">
-          <div class="tile"><span class="tile-label"><span class="key key-treated"></span>Treated</span>
+          <div class="tile treated"><span class="tile-label"><span class="key key-treated"></span>Treated</span>
             <span id="count-treated" class="tile-value">–</span></div>
-          <div class="tile"><span class="tile-label"><span class="key key-control"></span>Controls</span>
+          <div class="tile control"><span class="tile-label"><span class="key key-control"></span>Controls</span>
             <span id="count-control" class="tile-value">–</span></div>
         </div>
-        <p id="count-note" class="hint" aria-live="polite"></p>
-      </div>
+        <span id="count-note" class="hint" aria-live="polite"></span>
+      </section>
 
-      <div class="card">
-        <h2>Model</h2>
-        <p id="model-name">Set an outcome to see which model will be used.</p>
-        <p id="model-reason" class="hint"></p>
-      </div>
-
-      <div class="card">
-        <h2>Design check</h2>
-        <ul id="issues" class="issues" aria-live="polite"></ul>
-      </div>
-
-      <button type="button" id="run" class="primary">Run analysis</button>
+      <section class="side-card">
+        <span class="eyebrow">Statistical model</span>
+        <span id="model-name">Not set yet</span>
+        <span id="model-reason" class="hint">Chosen from the outcome once it is set.</span>
+      </section>
     </aside>
   </div>
 
   <dialog id="feature-dialog" aria-labelledby="feature-title">
     <form id="feature-form" novalidate>
-      <h2 id="feature-title">Covariate</h2>
-
-      <label class="field">Name <input id="f-label" maxlength="200" required></label>
-      <p class="hint">Column in the analysis table: <code id="f-name"></code></p>
-
-      <label class="field">Data source <select id="f-source"></select></label>
-
-      <div id="f-filters" class="filter-groups"></div>
-
-      <fieldset>
-        <legend>When, counted from the index date</legend>
-        <div class="row">
-          <label class="field">From <input id="f-from" type="number" step="1"></label>
-          <label class="field">to <input id="f-to" type="number" step="1"></label>
-          <label class="field">Unit <select id="f-unit"></select></label>
+      <div class="dialog-head">
+        <div>
+          <span class="eyebrow" id="feature-role"></span>
+          <h2 id="feature-title">Covariate</h2>
         </div>
-        <div id="f-presets" class="presets"></div>
-        <p class="hint" id="f-window-hint"></p>
-      </fieldset>
+        <button type="button" class="close" id="f-close" aria-label="Close">×</button>
+      </div>
 
-      <label class="field">Summarise as <select id="f-aggregation"></select></label>
-      <p class="hint" id="f-aggregation-hint"></p>
-
-      <label class="field" id="f-measure-field">Measure <select id="f-measure"></select></label>
-
-      <fieldset id="f-periods">
-        <legend>Periods</legend>
-        <label class="check"><input type="checkbox" id="f-periodise"> Split the window into periods</label>
-        <div class="row" id="f-period-fields">
-          <label class="field">Each period is a <select id="f-grain"></select></label>
-          <label class="field">Number of periods <input id="f-n" type="number" min="2" max="120" step="1"></label>
+      <div class="dialog-body">
+        <div class="grid-fields">
+          <label class="field">Name <input id="f-label" maxlength="200" required>
+            <span class="hint">Column in the analysis table: <code id="f-name"></code></span></label>
+          <label class="field">Data source <select id="f-source"></select></label>
         </div>
-      </fieldset>
 
-      <fieldset id="f-keep">
-        <legend>Keep patients whose value is</legend>
-        <div class="row">
-          <select id="f-op" aria-label="Comparison"></select>
-          <input id="f-value" type="number" step="any" aria-label="Value">
-        </div>
-        <div class="presets">
-          <button type="button" data-keep=">=,1">At least one</button>
-          <button type="button" data-keep="==,0">None</button>
-        </div>
-      </fieldset>
+        <div id="f-filters" class="filter-groups"></div>
 
-      <div id="f-preview" aria-live="polite"></div>
+        <fieldset>
+          <legend>Time window, counted from the index date</legend>
+          <div class="row">
+            <span class="unit">From</span><input id="f-from" type="number" step="1" aria-label="From">
+            <span class="unit">to</span><input id="f-to" type="number" step="1" aria-label="To">
+            <select id="f-unit" aria-label="Unit"></select>
+          </div>
+          <div id="f-presets" class="presets"></div>
+          <p class="hint" id="f-window-hint"></p>
+        </fieldset>
+
+        <div class="grid-fields">
+          <label class="field">Summarise as <select id="f-aggregation"></select>
+            <span class="hint" id="f-aggregation-hint"></span></label>
+          <label class="field" id="f-measure-field">Measure <select id="f-measure"></select></label>
+        </div>
+
+        <fieldset id="f-periods">
+          <legend>Periods <span class="count">optional · split the window into equal periods</span></legend>
+          <label class="check"><input type="checkbox" id="f-periodise"> Split the window into periods</label>
+          <div class="row" id="f-period-fields">
+            <label class="field">Each period is a <select id="f-grain"></select></label>
+            <label class="field">Number of periods <input id="f-n" type="number" min="2" max="120" step="1"></label>
+          </div>
+        </fieldset>
+
+        <fieldset id="f-keep" class="keep-box">
+          <legend>Keep patients whose value is</legend>
+          <div class="row">
+            <select id="f-op" aria-label="Comparison"></select>
+            <input id="f-value" type="number" step="any" aria-label="Value">
+          </div>
+          <div class="presets">
+            <button type="button" data-keep=">=,1">At least one</button>
+            <button type="button" data-keep="==,0">None</button>
+          </div>
+        </fieldset>
+
+        <div id="f-preview" aria-live="polite"></div>
+      </div>
 
       <div class="dialog-actions">
         <button type="button" id="f-preview-button">Preview</button>
         <span class="spacer"></span>
         <button type="button" id="f-cancel">Cancel</button>
-        <button type="submit" class="primary">Save</button>
+        <button type="submit" class="primary plain">Save</button>
       </div>
     </form>
   </dialog>

@@ -1,8 +1,12 @@
 """Tests for the HTTP API, through FastAPI's test client."""
+import json
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
 from cohort_studio import api
+from cohort_studio.llm import ScriptedClient
 from tests.support import build_database, hand_made_tables, repository_for
 
 
@@ -32,6 +36,9 @@ def study(*features: dict, **overrides) -> dict:
     body = {"exposure": "program_a", "features": list(features)}
     body.update(overrides)
     return body
+
+
+EXAMPLES = Path(__file__).parent.parent / "examples" / "assistant"
 
 
 def codes(body: dict) -> list[str]:
@@ -210,7 +217,7 @@ def test_the_study_builder_pages_are_served(client):
     page = client.get("/")
     assert page.status_code == 200
     assert "<title>cohort-studio</title>" in page.text
-    for path in ["/app.js", "/results.js", "/dom.js", "/style.css"]:
+    for path in ["/app.js", "/chat.js", "/results.js", "/dom.js", "/style.css"]:
         assert client.get(path).status_code == 200, path
     # The pages do not hide the API.
     assert client.get("/api/metadata").status_code == 200
@@ -220,3 +227,46 @@ def test_analysis_response_carries_the_plot_data(synthetic_client):
     body = synthetic_client.post("/api/analysis", json=synthetic_study()).json()
     assert set(body["plots"]) == {"propensity", "survival", "periods"}
     assert body["plots"]["propensity"]["edges"][0] == 0
+
+
+# ------------------------------------------------------------ the assistant
+
+def chat_client(repo, steps) -> TestClient:
+    return TestClient(api.create_app(repo, repo.mapping, ScriptedClient(steps)))
+
+
+def test_chat_drafts_a_study_the_analysis_endpoint_accepts(synthetic_repo):
+    steps = json.loads((EXAMPLES / "scenario_a_complete.json").read_text(encoding="utf-8"))
+    client = chat_client(synthetic_repo, steps)
+    question = {"role": "user", "content": "Does Programme A reduce ED attendances over 12 months?"}
+    body = client.post("/api/chat", json={"messages": [question]}).json()
+    assert body["status"] == "ready"
+    # The draft goes to the existing endpoints unchanged once the user has reviewed it.
+    analysis = client.post("/api/analysis", json=body["draft"])
+    assert analysis.status_code == 200
+    result = analysis.json()
+    assert result["model"]["measure"] == "Rate ratio"
+    assert result["interpretation"]
+
+
+def test_chat_refuses_a_conversation_that_does_not_end_with_the_user(synthetic_repo):
+    client = chat_client(synthetic_repo, [])
+    body = {"messages": [{"role": "user", "content": "Hi"}, {"role": "assistant", "content": "Hello"}]}
+    response = client.post("/api/chat", json=body)
+    assert response.status_code == 422
+    assert codes(response.json()) == ["invalid_request"]
+
+
+def test_chat_reports_an_unreachable_model_as_503(synthetic_repo):
+    client = chat_client(synthetic_repo, [])
+    response = client.post("/api/chat", json={"messages": [{"role": "user", "content": "Hi"}]})
+    assert response.status_code == 503
+    assert codes(response.json()) == ["assistant_unavailable"]
+
+
+def test_chat_model_comes_from_the_environment(synthetic_repo, monkeypatch):
+    monkeypatch.setenv("COHORT_LLM", "scripted")
+    monkeypatch.setenv("COHORT_LLM_SCRIPT", str(EXAMPLES / "scenario_c_unsupported.json"))
+    client = TestClient(api.create_app(synthetic_repo, synthetic_repo.mapping))
+    body = client.post("/api/chat", json={"messages": [{"role": "user", "content": "Mortality?"}]}).json()
+    assert body["status"] == "unsupported"

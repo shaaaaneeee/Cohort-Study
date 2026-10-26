@@ -1,0 +1,21 @@
+[
+  {
+    "text": "That question names the programme, the outcome, the follow-up and the adjustments, so I can set the study up directly.",
+    "tool_calls": [{"name": "propose_study", "input": {
+      "exposure": "program_a",
+      "seed": 0,
+      "person_covariates": ["age", "gender"],
+      "features": [
+        {"name": "prior_ed", "label": "ED attendances in the 12 months before",
+         "source": "ed_episodes", "window": {"from": -12, "to": -1, "unit": "months"},
+         "aggregation": "count", "role": "covariate"},
+        {"name": "ed_after", "label": "ED attendances in the 12 months after",
+         "source": "ed_episodes", "window": {"from": 1, "to": 12, "unit": "months"},
+         "aggregation": "count", "role": "outcome"}
+      ]
+    }}]
+  },
+  {
+    "text": "The study is ready. It compares Programme A members with matched patients who never enrolled, counting ED attendances in the 12 months after enrolment. Both groups are matched on age, gender and ED attendances in the 12 months before. Review it in the builder, then run it."
+  }
+]

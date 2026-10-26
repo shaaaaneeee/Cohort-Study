@@ -46,6 +46,22 @@ def issue(level: str, code: str, message: str, feature: str | None = None) -> di
     return {"level": level, "code": code, "message": message, "feature": feature}
 
 
+def issues_from_pydantic(errors: list[dict]) -> list[dict]:
+    """pydantic's errors, reworded as issues.
+
+    loc is the path to the bad field, such as features > 0 > window > from.
+    FastAPI puts "body" in front of it, which is left out.
+    """
+    issues = []
+    for error in errors:
+        where = []
+        for part in error["loc"]:
+            if part != "body":
+                where.append(str(part))
+        issues.append(issue("error", "invalid_request", f"{' > '.join(where)}: {error['msg']}"))
+    return issues
+
+
 # ------------------------------------------------------------ design rules
 
 def validate_study(study: StudySpec, mapping: Mapping,

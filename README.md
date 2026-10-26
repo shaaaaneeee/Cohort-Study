@@ -3,7 +3,8 @@
 A cohort study platform for health data. A researcher defines a treatment
 group, control group, covariates and an outcome; the system builds an
 analysis-ready table from a SQL database, balances the groups and fits the
-model the outcome calls for.
+model the outcome calls for. A study can also be described in plain words:
+an assistant drafts it, and the researcher reviews it before anything runs.
 
 Status: phase 5 of 6. Mapping config, study schema, design validator, a
 DuckDB backend that builds the analysis-ready table, the statistics
@@ -53,6 +54,36 @@ needs internet access.
 | `POST /api/attrition` | Patients left after each eligibility step, by group. |
 | `POST /api/preview` | One feature's values in the cohort, by group. Body: `{"feature": ..., "study": ...}`. |
 | `POST /api/analysis` | Matching, balance, the effect estimate and every warning. |
+| `POST /api/chat` | One turn with the study assistant. Body: `{"messages": [...], "draft": study or null}`. Returns the reply, any questions, and the drafted study with its issues. |
+
+## The study assistant
+
+The Ask tab (step 0) takes a research question in plain words. The
+assistant asks about anything that is missing, drafts the study, and hands
+it to the builder for review. The language model only drafts the study: every
+draft passes the same schema and design checks as one built by hand, and the
+analysis runs only when the user clicks Run analysis. See
+`docs/architecture.md`.
+
+It uses Claude through the `anthropic` package. Set your API key before
+starting the server:
+
+    set ANTHROPIC_API_KEY=...          (Windows; export on macOS and Linux)
+    python -m cohort_studio.api
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `COHORT_LLM` | `anthropic` | `demo` plays the three demonstration scenarios with no key: ask about ED visits, about mortality, or whether the programme "helps". `scripted` replays one script file |
+| `COHORT_LLM_SCRIPT` | | The script file for `scripted`, such as `examples/assistant/scenario_a_complete.json` |
+| `COHORT_LLM_MODEL` | `claude-opus-5-5` | The Claude model |
+| `COHORT_LLM_EFFORT` | `medium` | How much the model thinks: `low`, `medium`, `high`, `xhigh` or `max` |
+
+`examples/assistant/` has scripts for the three demonstration scenarios: a
+complete question, an ambiguous one and an unsupported one. To try them
+without a key:
+
+    set COHORT_LLM=demo
+    python -m cohort_studio.api
 
 ## Layout
 
@@ -70,6 +101,10 @@ needs internet access.
 | `cohort_studio/matching.py` | Covariates, propensity scores, 1:1 caliper matching and balance before and after. |
 | `cohort_studio/models.py` | Which model an outcome calls for (known before any data is read) and fitting it. |
 | `cohort_studio/analysis.py` | `run_analysis`: matching, model, warnings and a plain-English reading, from an analysis table. |
+| `cohort_studio/llm.py` | The language model interface: Claude, or a scripted stand-in for tests and demos. |
+| `cohort_studio/assistant.py` | `converse`: one turn of the study assistant, from question to validated draft. |
 | `cohort_studio/api.py` | The HTTP API; also serves `web/`. |
-| `web/` | The study builder: `app.js` (cohort and features), `results.js` (results and charts), `dom.js` (shared helpers). Plain HTML and JavaScript, no build step. |
+| `web/` | The study builder: `chat.js` (the assistant), `app.js` (cohort and features), `results.js` (results and charts), `dom.js` (shared helpers). Plain HTML and JavaScript, no build step. |
+| `examples/assistant/` | Scripted conversations for the three demonstration scenarios. |
+| `docs/architecture.md` | How the assistant fits in front of the engine, and what the model may decide. |
 | `tests/` | One test file per module. `test_repository.py` checks the analysis table value by value on hand-made data; `test_analysis.py` checks the planted effect is recovered end to end. |

@@ -10,3 +10,4 @@ fastapi>=0.110
 uvicorn>=0.29
 pytest>=8.0
 httpx2>=2.0       # used by FastAPI's test client
+anthropic>=1.13   # the study assistant; the rest of the app runs without it

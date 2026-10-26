@@ -12,25 +12,28 @@ failure the same way:
     404  a source or dimension that is not in the mapping (value lookups)
     422  a request that is not a valid study, a study with design errors,
          or data that cannot support the analysis
+    503  the study assistant's language model could not be reached
 """
 import math
 import os
 from pathlib import Path
-from typing import get_args
+from typing import Literal, get_args
 
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from cohort_studio.analysis import run_analysis
+from cohort_studio.assistant import converse
 from cohort_studio.features import AGGREGATIONS, FeatureSpec, Periodise, StudySpec, Window
+from cohort_studio.llm import LLMClient, LLMError, client_from_env
 from cohort_studio.mapping import Mapping, load_mapping
 from cohort_studio.models import AnalysisError, implied_model
 from cohort_studio.repository import CohortRepository, StudyError, open_repository
-from cohort_studio.validator import check_small_cells, issue, validate_study
+from cohort_studio.validator import check_small_cells, issue, issues_from_pydantic, validate_study
 
 DEFAULT_CONFIG = Path(__file__).parent.parent / "config" / "mapping.yaml"
 WEB_DIR = Path(__file__).parent.parent / "web"
@@ -43,7 +46,29 @@ class PreviewRequest(BaseModel):
     study: StudySpec
 
 
-def create_app(repository: CohortRepository, mapping: Mapping) -> FastAPI:
+class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=20000)
+
+
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    messages: list[ChatMessage] = Field(min_length=1, max_length=100)
+    draft: StudySpec | None = None
+
+    @model_validator(mode="after")
+    def _ends_with_user(self) -> "ChatRequest":
+        if self.messages[0].role != "user" or self.messages[-1].role != "user":
+            raise ValueError("the conversation must start and end with a user message")
+        return self
+
+
+def create_app(repository: CohortRepository, mapping: Mapping,
+               llm_client: LLMClient | None = None) -> FastAPI:
+    """The app. llm_client is made from the environment on the first chat if not given."""
     app = FastAPI(title="cohort-studio")
 
     def warnings_for(spec: StudySpec) -> list[dict]:
@@ -68,56 +93,21 @@ def create_app(repository: CohortRepository, mapping: Mapping) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     def invalid_request(request: Request, e: RequestValidationError) -> JSONResponse:
-        # pydantic's errors, reworded into the issue format. loc is the path
-        # to the bad field, such as body > features > 0 > window > from.
-        issues = []
-        for error in e.errors():
-            where = []
-            for part in error["loc"]:
-                if part != "body":
-                    where.append(str(part))
-            issues.append(issue("error", "invalid_request", f"{' > '.join(where)}: {error['msg']}"))
         return JSONResponse(status_code=422, content={
-            "message": "The request is not a valid study.", "issues": issues})
+            "message": "The request is not a valid study.",
+            "issues": issues_from_pydantic(e.errors())})
+
+    @app.exception_handler(LLMError)
+    def llm_error(request: Request, e: LLMError) -> JSONResponse:
+        return JSONResponse(status_code=503, content={
+            "message": str(e), "issues": [issue("error", "assistant_unavailable", str(e))]})
 
     # ------------------------------------------------------------- endpoints
 
     @app.get("/api/metadata")
     def metadata() -> dict:
-        """Everything the study builder can offer, from the mapping config.
-
-        Physical table and column names other than dimensions and measures
-        are left out: the UI has no use for them.
-        """
-        sources = []
-        for name, source in mapping.feature_sources().items():
-            dimensions = []
-            for column, dimension in source.dimensions.items():
-                dimensions.append({"name": column, "label": dimension.label})
-            measures = []
-            for column, measure in source.measures.items():
-                measures.append({"name": column, "label": measure.label, "aggregations": measure.agg})
-            sources.append({"name": name, "label": source.label or name,
-                            "granularity": source.granularity,
-                            "coverage": {"start": source.coverage.start, "end": source.coverage.end},
-                            "dimensions": dimensions, "measures": measures})
-        exposures = []
-        for x in mapping.exposure:
-            exposures.append({"name": x.name, "label": x.label or x.name})
-        aggregations = []
-        for name, description in AGGREGATIONS.items():
-            aggregations.append({"name": name, "description": description})
-        return {
-            "dataset": mapping.dataset,
-            "exposures": exposures,
-            "person_attributes": mapping.person.attributes,
-            "person_covariates": ["age"] + mapping.person.attributes,
-            "sources": sources,
-            "aggregations": aggregations,
-            "roles": list(get_args(FeatureSpec.model_fields["role"].annotation)),
-            "window_units": list(get_args(Window.model_fields["unit"].annotation)),
-            "period_grains": list(get_args(Periodise.model_fields["grain"].annotation)),
-        }
+        """Everything the study builder can offer, from the mapping config."""
+        return catalogue(mapping)
 
     @app.get("/api/values/{source}/{dimension}", response_model=list[str])
     def dimension_values(source: str, dimension: str):
@@ -180,10 +170,64 @@ def create_app(repository: CohortRepository, mapping: Mapping) -> FastAPI:
         result["issues"] = warnings_for(spec) + result["issues"]
         return clean(result)
 
+    @app.post("/api/chat")
+    def chat(request: ChatRequest) -> dict:
+        """One turn with the study assistant. See assistant.converse.
+
+        The assistant only drafts the study. Running it is left to /api/analysis,
+        after the user has reviewed the draft in the builder.
+        """
+        nonlocal llm_client
+        if llm_client is None:
+            llm_client = client_from_env()
+        history = []
+        for m in request.messages:
+            history.append(m.model_dump())
+        return clean(converse(history, request.draft, catalogue(mapping), mapping,
+                              repository.dimension_values, llm_client))
+
     # The study builder's pages, at /. Mounted last so the /api routes
     # above are matched first.
     app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
     return app
+
+
+def catalogue(mapping: Mapping) -> dict:
+    """Everything a study can use, from the mapping config.
+
+    Served to the builder as /api/metadata and written into the assistant's
+    prompt. Physical table and column names other than dimensions and
+    measures are left out: neither has any use for them.
+    """
+    sources = []
+    for name, source in mapping.feature_sources().items():
+        dimensions = []
+        for column, dimension in source.dimensions.items():
+            dimensions.append({"name": column, "label": dimension.label})
+        measures = []
+        for column, measure in source.measures.items():
+            measures.append({"name": column, "label": measure.label, "aggregations": measure.agg})
+        sources.append({"name": name, "label": source.label or name,
+                        "granularity": source.granularity,
+                        "coverage": {"start": source.coverage.start, "end": source.coverage.end},
+                        "dimensions": dimensions, "measures": measures})
+    exposures = []
+    for x in mapping.exposure:
+        exposures.append({"name": x.name, "label": x.label or x.name})
+    aggregations = []
+    for name, description in AGGREGATIONS.items():
+        aggregations.append({"name": name, "description": description})
+    return {
+        "dataset": mapping.dataset,
+        "exposures": exposures,
+        "person_attributes": mapping.person.attributes,
+        "person_covariates": ["age"] + mapping.person.attributes,
+        "sources": sources,
+        "aggregations": aggregations,
+        "roles": list(get_args(FeatureSpec.model_fields["role"].annotation)),
+        "window_units": list(get_args(Window.model_fields["unit"].annotation)),
+        "period_grains": list(get_args(Periodise.model_fields["grain"].annotation)),
+    }
 
 
 def clean(value):

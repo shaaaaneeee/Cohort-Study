@@ -9,6 +9,7 @@ import { el, formatCount, formatNumber, formatShare, issueItems, numberTable, re
 const charts = [];     // Chart.js instances, destroyed before each redraw
 let shown = null;      // the result on screen, redrawn when the theme changes
 let study = null;      // the study it came from, for feature labels
+let exposure = "";     // the programme's label, for the answer sentence
 
 export function setResultsBusy(busy) {
   // Keep the previous result visible but faded while a new one is computed,
@@ -16,10 +17,16 @@ export function setResultsBusy(busy) {
   document.getElementById("results").classList.toggle("busy", busy);
 }
 
-export function renderResults(result, fromStudy) {
+export function renderResults(result, fromStudy, exposureLabel) {
   shown = result;
   study = fromStudy;
+  exposure = exposureLabel;
   draw();
+}
+
+// Charts take their colours when drawn, so a theme change redraws them.
+export function redrawResults() {
+  if (shown) draw();
 }
 
 export function renderResultsError(error) {
@@ -28,15 +35,12 @@ export function renderResultsError(error) {
   const box = document.getElementById("results");
   box.hidden = false;
   document.getElementById("results-empty").hidden = true;
-  box.replaceChildren(el("div", { class: "card" },
-    el("h2", {}, "The analysis could not be run"),
+  box.replaceChildren(el("div", { class: "answer" },
+    el("span", { class: "eyebrow" }, "Step 3 · Results"),
+    el("p", { class: "answer-sentence" }, "The analysis could not be run."),
     el("p", {}, error.message),
     error.issues.length ? el("ul", { class: "issues" }, ...issueItems(error.issues)) : null));
 }
-
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  if (shown) draw();
-});
 
 function draw() {
   destroyCharts();
@@ -44,15 +48,18 @@ function draw() {
   box.hidden = false;
   document.getElementById("results-empty").hidden = true;
   box.replaceChildren();
-  // Each section adds itself to box before drawing its chart, because
-  // Chart.js measures the canvas's container when it draws.
-  headline(box, shown);
+  // The answer first, then whether to trust it, then the detail. Each
+  // section adds itself to box before drawing its chart, because Chart.js
+  // measures the canvas's container when it draws.
+  answer(box, shown);
   cohortTiles(box, shown);
-  warnings(box, shown);
+  trust(box, shown);
+  box.append(el("h2", { class: "section-title" }, "Detail"));
   balanceChart(box, shown);
   propensityCharts(box, shown);
   survivalChart(box, shown);
   periodChart(box, shown);
+  box.append(el("p", { class: "model-note" }, shown.interpretation));
 }
 
 function destroyCharts() {
@@ -79,52 +86,130 @@ function covariateLabel(column) {
 }
 
 function pText(p) {
-  return p < 0.001 ? "p < 0.001" : `p = ${p.toFixed(3)}`;
+  return p < 0.001 ? "< 0.001" : p.toFixed(3);
 }
 
-function headline(box, r) {
+// "17% lower" or "4% higher" for a ratio.
+function change(ratio) {
+  const pct = Math.round(Math.abs(1 - ratio) * 100);
+  return ratio < 1 ? `${pct}% lower` : `${pct}% higher`;
+}
+
+// Ticks at a round step across [min, max].
+function ticks(min, max) {
+  const raw = (max - min) / 5;
+  const step = [0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10].find((s) => s >= raw) || raw;
+  const out = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) out.push(Number(v.toFixed(4)));
+  return out;
+}
+
+// The headline: the answer as a sentence, the estimate, and its interval
+// drawn against the line of no difference.
+function answer(box, r) {
   const m = r.model;
-  box.append(el("div", { class: "card" },
-    el("div", { class: "headline" },
-      el("span", { class: "hero" }, formatNumber(m.estimate)),
-      el("span", { class: "hero-label" },
-        `${m.measure}, 95% CI ${formatNumber(m.ci_low)} to ${formatNumber(m.ci_high)}, ${pText(m.p_value)}`)),
-    el("p", {}, r.interpretation),
-    el("p", { class: "hint" }, m.reason)));
+  const outcome = study.features.find((f) => f.role === "outcome");
+  const what = { "Odds ratio": "odds", "Rate ratio": "rate", "Hazard ratio": "rate" }[m.measure] || "value";
+  const includesOne = m.ci_low <= 1 && m.ci_high >= 1;
+  const noChange = Math.round(Math.abs(1 - m.estimate) * 100) === 0;
+  const subject = `Patients in ${exposure}`;
+  const compared = r.cohort.matched ? "similar patients who weren't enrolled" : "patients who weren't enrolled";
+  const label = outcome.label.charAt(0).toLowerCase() + outcome.label.slice(1);
+  let sentence = noChange
+    ? `${subject} had about the same ${what} of ${label} as ${compared}`
+    : `${subject} had a ${change(m.estimate)} ${what} of ${label} than ${compared}`;
+  sentence += includesOne && !noChange ? ", but the data are also consistent with no difference." : ".";
+
+  const lo = Math.min(m.ci_low, 1);
+  const hi = Math.max(m.ci_high, 1);
+  const pad = (hi - lo) * 0.25 || 0.1;
+  const min = Math.max(0, lo - pad);
+  const max = hi + pad;
+  const at = (v) => `${((v - min) / (max - min)) * 100}%`;
+  const pairs = r.cohort.matched ? `${formatCount(r.cohort.treated_matched)} matched pairs` : "not matched";
+
+  box.append(el("section", { class: "answer", "aria-label": "Answer" },
+    el("div", { class: "answer-top" },
+      el("span", { class: "eyebrow" }, "Step 3 · The answer"),
+      el("span", { class: "hint" }, `${outcome.label} · ${pairs}`)),
+    el("p", { class: "answer-sentence" }, sentence),
+    el("div", { class: "figures" },
+      el("div", { class: "figure" }, el("span", {}, m.measure), el("span", { class: "big" }, formatNumber(m.estimate))),
+      el("div", { class: "figure" }, el("span", {}, "95% confidence interval"),
+        el("span", { class: "mid" }, `${formatNumber(m.ci_low)} to ${formatNumber(m.ci_high)}`)),
+      el("div", { class: "figure" }, el("span", {}, "p-value"), el("span", { class: "mid" }, pText(m.p_value))),
+      el("span", { class: "significance" }, m.p_value < 0.05 ? "Statistically significant at 0.05" : "Not statistically significant at 0.05")),
+    el("figure", { class: "ci", "aria-label": `${m.measure} ${formatNumber(m.estimate)} with 95% interval ${formatNumber(m.ci_low)} to ${formatNumber(m.ci_high)}, where 1 means no difference` },
+      el("div", { class: "ci-track" },
+        el("div", { class: "line" }),
+        el("div", { class: "null", style: `left:${at(1)}` }),
+        el("div", { class: "range", style: `left:${at(m.ci_low)};width:calc(${at(m.ci_high)} - ${at(m.ci_low)})` }),
+        el("div", { class: "point", style: `left:${at(m.estimate)}` })),
+      el("div", { class: "ci-ticks", "aria-hidden": "true" },
+        ...ticks(min, max).map((v) => el("span", { class: Math.abs(v - 1) < 1e-9 ? "one" : null, style: `left:${at(v)}` }, v.toFixed(2)))),
+      el("div", { class: "ci-sides" },
+        el("span", {}, `← Lower with ${exposure}`), el("span", {}, `Higher with ${exposure} →`)),
+      el("figcaption", {}, "The plausible effect ranges from ", el("strong", {}, change(m.ci_low)),
+        " to ", el("strong", {}, change(m.ci_high)), ". ",
+        includesOne ? "Because that range includes no difference, this study can't rule out chance."
+          : "That range excludes no difference, so chance alone is an unlikely explanation."))));
 }
 
-function tile(label, value, note = null) {
-  return el("div", { class: "tile" },
-    el("span", { class: "tile-label" }, label),
+function tile(label, value, note = null, key = null) {
+  return el("div", { class: "result-tile" },
+    el("span", { class: "tile-label" }, key ? el("span", { class: `key key-${key}` }) : null, label),
     el("span", { class: "tile-value" }, value),
     note ? el("span", { class: "hint" }, note) : null);
 }
 
 function cohortTiles(box, r) {
   const c = r.cohort;
-  const unmatched = c.treated - c.treated_matched;
-  let how = "Not matched: no covariates were chosen.";
-  if (c.matched && unmatched === 0) {
-    how = "Every treated patient was matched to one control with a similar propensity score.";
-  } else if (c.matched) {
-    how = "Treated patients were matched one to one with controls of similar propensity score. " +
-      `${formatCount(unmatched)} had no close enough control and are left out.`;
-  }
-  box.append(el("div", { class: "card" },
-    el("h2", {}, "Patients analysed"),
-    el("div", { class: "result-tiles" },
-      tile("Treated", formatCount(c.treated_matched), `of ${formatCount(c.treated)} in the cohort`),
-      tile("Controls", formatCount(c.control_matched), `of ${formatCount(c.control)} in the cohort`),
-      tile("Treated with the outcome", formatCount(r.events.treated)),
-      tile("Controls with the outcome", formatCount(r.events.control))),
-    el("p", { class: "hint" }, how)));
+  box.append(el("div", { class: "result-tiles" },
+    tile(c.matched ? "Treated, matched" : "Treated", formatCount(c.treated_matched), `of ${formatCount(c.treated)} eligible`, "treated"),
+    tile(c.matched ? "Controls, matched" : "Controls", formatCount(c.control_matched), `from a pool of ${formatCount(c.control)}`, "control"),
+    tile("Treated with the outcome", formatCount(r.events.treated)),
+    tile("Controls with the outcome", formatCount(r.events.control))));
 }
 
-function warnings(box, r) {
-  const body = r.issues.length
-    ? el("ul", { class: "issues" }, ...issueItems(r.issues))
-    : el("p", { class: "ok" }, "None.");
-  box.append(el("div", { class: "card" }, el("h2", {}, "Warnings"), body));
+function check(ok, title, text) {
+  return el("li", { class: ok ? null : "warn" },
+    ok ? el("span", { class: "tick", "aria-label": "Passed" }, "✓") : el("span", { class: "badge badge-warning" }, "Warning"),
+    el("span", {}, el("strong", {}, title), el("span", { class: "text" }, text)));
+}
+
+// What a reader should check before believing the estimate.
+function trust(box, r) {
+  const c = r.cohort;
+  const items = [];
+  if (r.balance.length) {
+    const worst = r.balance.reduce((a, b) => (Math.abs(b.smd_after) > Math.abs(a.smd_after) ? b : a));
+    items.push(Math.abs(worst.smd_after) < 0.1
+      ? check(true, "Groups are balanced", `All ${r.balance.length} characteristics under 0.1 standardised difference${c.matched ? " after matching" : ""}.`)
+      : check(false, "Groups still differ", `Largest standardised difference: ${Math.abs(worst.smd_after).toFixed(2)} (${covariateLabel(worst.covariate)}).`));
+  }
+  const unmatched = c.treated - c.treated_matched;
+  if (!c.matched) {
+    items.push(check(false, "Groups were not matched", "No covariates were chosen, so the groups are compared as they are."));
+  } else if (unmatched === 0) {
+    items.push(check(true, "Every treated patient was matched", "Each has one control with a similar propensity score."));
+  } else {
+    items.push(check(false, `${formatCount(unmatched)} treated patients dropped`,
+      `No close enough control. The result applies to the ${Math.round(c.treated_matched / c.treated * 100)}% who were matched.`));
+  }
+  for (const issue of r.issues) {
+    items.push(el("li", { class: "warn" },
+      el("span", { class: `badge badge-${issue.level}` }, issue.level === "error" ? "Error" : "Warning"),
+      el("span", { class: "text" }, issue.message)));
+  }
+  box.append(el("h2", { class: "section-title" }, "Can I trust this?"), el("ul", { class: "trust" }, ...items));
+}
+
+// A detail section: title and legend in the head, the chart, and its numbers.
+function chartCard(title, hint, legendNode, body, table) {
+  return el("section", { class: "card flush" },
+    el("div", { class: "card-head" }, el("h3", {}, title), legendNode),
+    el("div", { class: "chart-body" }, hint ? el("p", { class: "hint" }, hint) : null, body),
+    table);
 }
 
 
@@ -160,7 +245,7 @@ function chartBox(height) {
 }
 
 function tableView(headers, rows) {
-  return el("details", {}, el("summary", {}, "Show the numbers"), numberTable(headers, rows));
+  return el("details", {}, el("summary", {}, "Data table"), el("div", { class: "table-scroll" }, numberTable(headers, rows)));
 }
 
 function axis(t, title, extra = {}) {
@@ -215,13 +300,12 @@ function balanceChart(box, r) {
   const after = rows.map((b) => Math.abs(b.smd_after));
   const { canvas, node } = chartBox(Math.max(180, 26 * names.length + 70));
 
-  box.append(el("div", { class: "card" },
-    el("h2", {}, "Covariate balance"),
-    el("p", { class: "hint" }, "How different the groups are on each covariate, as a standardised mean " +
-      "difference. Below 0.1, the vertical line, is usually taken as balanced."),
+  box.append(chartCard("Balance before and after matching",
+    "How different the groups are on each covariate, as a standardised mean " +
+      "difference. Below 0.1, the vertical line, is usually taken as balanced.",
     legend([{ label: "Before matching", color: t.before, kind: "dot" },
             { label: "After matching", color: t.ink, kind: "dot" },
-            { label: "0.1", color: t.muted, kind: "line" }]),
+            { label: "0.1 threshold", color: t.muted, kind: "line" }]),
     node,
     tableView(["Covariate", "Treated mean before", "Control mean before", "Difference before",
                "Treated mean after", "Control mean after", "Difference after"],
@@ -270,11 +354,10 @@ function propensityCharts(box, r) {
   }
   const rows = middles.map((x, i) => [`${p.edges[i].toFixed(2)} to ${p.edges[i + 1].toFixed(2)}`, formatShare(p.before.treated[i]), formatShare(p.before.control[i]),
     formatShare(p.after.treated[i]), formatShare(p.after.control[i])]);
-  box.append(el("div", { class: "card" },
-    el("h2", {}, "Propensity score overlap"),
-    el("p", { class: "hint" }, "Share of each group at each propensity score, the estimated chance of " +
+  box.append(chartCard("Propensity scores",
+    "Share of each group at each propensity score, the estimated chance of " +
       "being treated. Treated patients where hardly any controls lie have no good comparison. After " +
-      "matching the two lines should nearly coincide."),
+      "matching the two lines should nearly coincide.",
     legend([{ label: "Treated", color: t.treated, kind: "line" }, { label: "Controls", color: t.control, kind: "line" }]),
     pair,
     tableView(["Propensity score", "Treated before", "Controls before", "Treated after", "Controls after"], rows)));
@@ -301,11 +384,10 @@ function survivalChart(box, r) {
   const t = theme();
   const { canvas, node } = chartBox(280);
   const points = (values) => s.days.map((day, i) => ({ x: day, y: values[i] }));
-  box.append(el("div", { class: "card" },
-    el("h2", {}, "Time to first event"),
-    el("p", { class: "hint" }, "Share of each analysed group still without the event, by days since the " +
+  box.append(chartCard("Time to first event",
+    "Share of each analysed group still without the event, by days since the " +
       "index date (Kaplan-Meier). The hazard ratio assumes these curves separate steadily; if they " +
-      "cross or come together, one ratio summarises them poorly."),
+      "cross or come together, one ratio summarises them poorly.",
     legend([{ label: "Treated", color: t.treated, kind: "line" }, { label: "Controls", color: t.control, kind: "line" }]),
     node,
     tableView(["Day", "Treated without the event", "Controls without the event"],
@@ -333,10 +415,9 @@ function periodChart(box, r) {
   const t = theme();
   const labels = p.periods.map((_, i) => `Period ${i + 1}`);
   const { canvas, node } = chartBox(260);
-  box.append(el("div", { class: "card" },
-    el("h2", {}, "Outcome by period"),
-    el("p", { class: "hint" }, "Mean per patient in each period, in the analysed groups. The rate ratio " +
-      "above is the average gap between these lines, allowing for each patient's periods being related."),
+  box.append(chartCard("Outcome by period",
+    "Mean per patient in each period, in the analysed groups. The rate ratio " +
+      "above is the average gap between these lines, allowing for each patient's periods being related.",
     legend([{ label: "Treated", color: t.treated, kind: "line" }, { label: "Controls", color: t.control, kind: "line" }]),
     node,
     tableView(["Period", "Treated", "Controls"],
