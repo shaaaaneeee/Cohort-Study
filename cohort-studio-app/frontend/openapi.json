@@ -1,0 +1,1844 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Cohort Studio API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/metadata": {
+      "get": {
+        "tags": [
+          "metadata"
+        ],
+        "summary": "Metadata",
+        "description": "Everything the study builder can offer, from the mapping config.",
+        "operationId": "metadata_api_metadata_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Metadata"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/values/{source}/{dimension}": {
+      "get": {
+        "tags": [
+          "metadata"
+        ],
+        "summary": "Dimension Values",
+        "description": "The values a dimension takes. Use source \"person\" for person attributes.",
+        "operationId": "dimension_values_api_values__source___dimension__get",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source"
+            }
+          },
+          {
+            "name": "dimension",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dimension"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Dimension Values Api Values  Source   Dimension  Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/study/check": {
+      "post": {
+        "tags": [
+          "study"
+        ],
+        "summary": "Check",
+        "description": "Every design issue, and the model the outcome implies, without building the cohort.",
+        "operationId": "check_api_study_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudySpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/attrition": {
+      "post": {
+        "tags": [
+          "study"
+        ],
+        "summary": "Attrition",
+        "description": "Patients left after each eligibility step, by group.",
+        "operationId": "attrition_api_attrition_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudySpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttritionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/preview": {
+      "post": {
+        "tags": [
+          "study"
+        ],
+        "summary": "Preview",
+        "description": "One feature's values in the study's cohort, by group.",
+        "operationId": "preview_api_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analysis": {
+      "post": {
+        "tags": [
+          "study"
+        ],
+        "summary": "Analysis",
+        "description": "Matching, balance, the effect estimate and every warning.",
+        "operationId": "analysis_api_analysis_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StudySpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Chat",
+        "description": "One turn with the study assistant.\n\nReturns the reply, any questions, and the drafted study with its issues.\nThe assistant only drafts; running the study is left to /api/analysis.",
+        "operationId": "chat_api_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "description": "200 when the API is up and the database answers, 503 otherwise.\n\nUsed by the container HEALTHCHECK and Northflank's health checks. Never\nneeds the API key.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AggregationInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "description"
+        ],
+        "title": "AggregationInfo"
+      },
+      "AnalysisResult": {
+        "properties": {
+          "model": {
+            "$ref": "#/components/schemas/FittedModel"
+          },
+          "cohort": {
+            "$ref": "#/components/schemas/CohortSizes"
+          },
+          "events": {
+            "$ref": "#/components/schemas/GroupCounts"
+          },
+          "balance": {
+            "items": {
+              "$ref": "#/components/schemas/BalanceRow"
+            },
+            "type": "array",
+            "title": "Balance"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "interpretation": {
+            "type": "string",
+            "title": "Interpretation"
+          },
+          "plots": {
+            "$ref": "#/components/schemas/Plots"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "model",
+          "cohort",
+          "events",
+          "balance",
+          "issues",
+          "interpretation",
+          "plots"
+        ],
+        "title": "AnalysisResult"
+      },
+      "AttritionResult": {
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/AttritionStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "steps",
+          "issues"
+        ],
+        "title": "AttritionResult"
+      },
+      "AttritionStep": {
+        "properties": {
+          "step": {
+            "type": "string",
+            "title": "Step"
+          },
+          "treated": {
+            "type": "integer",
+            "title": "Treated"
+          },
+          "control": {
+            "type": "integer",
+            "title": "Control"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "step",
+          "treated",
+          "control"
+        ],
+        "title": "AttritionStep"
+      },
+      "BalanceRow": {
+        "properties": {
+          "covariate": {
+            "type": "string",
+            "title": "Covariate"
+          },
+          "treated_mean_before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treated Mean Before"
+          },
+          "control_mean_before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Mean Before"
+          },
+          "smd_before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smd Before"
+          },
+          "treated_mean_after": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Treated Mean After"
+          },
+          "control_mean_after": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Mean After"
+          },
+          "smd_after": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smd After"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "covariate",
+          "treated_mean_before",
+          "control_mean_before",
+          "smd_before",
+          "treated_mean_after",
+          "control_mean_after",
+          "smd_after"
+        ],
+        "title": "BalanceRow"
+      },
+      "ChatMessage": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Content"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatMessage"
+      },
+      "ChatRequest": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessage"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Messages"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StudySpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "messages"
+        ],
+        "title": "ChatRequest",
+        "description": "One turn: the visible conversation, ending with the user, and the current study.\n\ndraft is the study in the builder, including any changes the user made by\nhand, so the assistant refines what the user sees rather than its own\nlast proposal."
+      },
+      "ChatResult": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "asking",
+              "unsupported"
+            ],
+            "title": "Status"
+          },
+          "reply": {
+            "type": "string",
+            "title": "Reply"
+          },
+          "questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Questions"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StudySpec"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpliedModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "status",
+          "reply",
+          "questions",
+          "draft",
+          "issues",
+          "model"
+        ],
+        "title": "ChatResult"
+      },
+      "CheckResult": {
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpliedModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "issues",
+          "model"
+        ],
+        "title": "CheckResult"
+      },
+      "CohortSizes": {
+        "properties": {
+          "treated": {
+            "type": "integer",
+            "title": "Treated"
+          },
+          "control": {
+            "type": "integer",
+            "title": "Control"
+          },
+          "treated_matched": {
+            "type": "integer",
+            "title": "Treated Matched"
+          },
+          "control_matched": {
+            "type": "integer",
+            "title": "Control Matched"
+          },
+          "matched": {
+            "type": "boolean",
+            "title": "Matched"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "treated",
+          "control",
+          "treated_matched",
+          "control_matched",
+          "matched"
+        ],
+        "title": "CohortSizes"
+      },
+      "Coverage": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Coverage"
+      },
+      "ErrorBody": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "message",
+          "issues"
+        ],
+        "title": "ErrorBody"
+      },
+      "FeatureSpec": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Label"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "title": "Source"
+          },
+          "filters": {
+            "patternProperties": {
+              "^[A-Za-z_][A-Za-z0-9_]*$": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "minItems": 1
+              }
+            },
+            "propertyNames": {
+              "maxLength": 128
+            },
+            "type": "object",
+            "title": "Filters",
+            "default": {}
+          },
+          "window": {
+            "$ref": "#/components/schemas/Window"
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "count",
+              "distinct_count",
+              "binary",
+              "sum",
+              "mean",
+              "max",
+              "rate",
+              "time_to_first"
+            ],
+            "title": "Aggregation"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "periodise": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Periodise"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "covariate",
+              "outcome",
+              "inclusion"
+            ],
+            "title": "Role"
+          },
+          "keep_if": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KeepIf"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "source",
+          "window",
+          "aggregation",
+          "role"
+        ],
+        "title": "FeatureSpec",
+        "description": "One covariate, outcome or inclusion criterion."
+      },
+      "FittedModel": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "measure": {
+            "type": "string",
+            "title": "Measure"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "estimate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate"
+          },
+          "ci_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci Low"
+          },
+          "ci_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ci High"
+          },
+          "p_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Value"
+          },
+          "parameters": {
+            "type": "integer",
+            "title": "Parameters"
+          },
+          "dispersion": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispersion"
+          },
+          "ph_p_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ph P Value"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "model",
+          "measure",
+          "name",
+          "reason",
+          "estimate",
+          "ci_low",
+          "ci_high",
+          "p_value",
+          "parameters"
+        ],
+        "title": "FittedModel"
+      },
+      "GroupCounts": {
+        "properties": {
+          "treated": {
+            "type": "integer",
+            "title": "Treated"
+          },
+          "control": {
+            "type": "integer",
+            "title": "Control"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "treated",
+          "control"
+        ],
+        "title": "GroupCounts"
+      },
+      "GroupSeries": {
+        "properties": {
+          "treated": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Treated"
+          },
+          "control": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Control"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "treated",
+          "control"
+        ],
+        "title": "GroupSeries"
+      },
+      "GroupStats": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "nonzero": {
+            "type": "integer",
+            "title": "Nonzero"
+          },
+          "mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "n",
+          "nonzero",
+          "mean",
+          "min",
+          "max"
+        ],
+        "title": "GroupStats"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "title": "Status"
+          },
+          "database": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "title": "Database"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "status",
+          "database",
+          "version"
+        ],
+        "title": "Health"
+      },
+      "ImpliedModel": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "measure": {
+            "type": "string",
+            "title": "Measure"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "model",
+          "measure",
+          "name",
+          "reason"
+        ],
+        "title": "ImpliedModel"
+      },
+      "Issue": {
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Level"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "level",
+          "code",
+          "message"
+        ],
+        "title": "Issue"
+      },
+      "KeepIf": {
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "==",
+              "!=",
+              ">=",
+              ">",
+              "<=",
+              "<"
+            ],
+            "title": "Op"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "op",
+          "value"
+        ],
+        "title": "KeepIf",
+        "description": "The test an inclusion criterion applies: keep a patient if `feature op value`.\n\n\"Diabetes before index\" is a binary feature with op \"==\" and value 1.\n\"No asthma before index\" is the same with value 0. There is no separate\nexclusion type."
+      },
+      "MeasureInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "aggregations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aggregations"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "aggregations"
+        ],
+        "title": "MeasureInfo"
+      },
+      "Metadata": {
+        "properties": {
+          "dataset": {
+            "type": "string",
+            "title": "Dataset"
+          },
+          "exposures": {
+            "items": {
+              "$ref": "#/components/schemas/Named"
+            },
+            "type": "array",
+            "title": "Exposures"
+          },
+          "person_attributes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Person Attributes"
+          },
+          "person_covariates": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Person Covariates"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceInfo"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "aggregations": {
+            "items": {
+              "$ref": "#/components/schemas/AggregationInfo"
+            },
+            "type": "array",
+            "title": "Aggregations"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles"
+          },
+          "window_units": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Window Units"
+          },
+          "period_grains": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Period Grains"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "dataset",
+          "exposures",
+          "person_attributes",
+          "person_covariates",
+          "sources",
+          "aggregations",
+          "roles",
+          "window_units",
+          "period_grains"
+        ],
+        "title": "Metadata"
+      },
+      "Named": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "label"
+        ],
+        "title": "Named"
+      },
+      "Periodise": {
+        "properties": {
+          "grain": {
+            "type": "string",
+            "enum": [
+              "month",
+              "quarter",
+              "year"
+            ],
+            "title": "Grain"
+          },
+          "n": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 2.0,
+            "title": "N"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "grain",
+          "n"
+        ],
+        "title": "Periodise",
+        "description": "Split the window into n consecutive periods of one grain each.\n\nA periodised covariate becomes n columns. A periodised outcome becomes n\nrepeated measurements per patient. Those are correlated within a patient,\nso they need a repeated-measures model rather than a plain GLM."
+      },
+      "PeriodsPlot": {
+        "properties": {
+          "treated": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Treated"
+          },
+          "control": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Control"
+          },
+          "periods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Periods"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "treated",
+          "control",
+          "periods"
+        ],
+        "title": "PeriodsPlot"
+      },
+      "Plots": {
+        "properties": {
+          "propensity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PropensityPlot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "survival": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SurvivalPlot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "periods": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeriodsPlot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "propensity",
+          "survival",
+          "periods"
+        ],
+        "title": "Plots"
+      },
+      "PreviewColumn": {
+        "properties": {
+          "column": {
+            "type": "string",
+            "title": "Column"
+          },
+          "treated": {
+            "$ref": "#/components/schemas/GroupStats"
+          },
+          "control": {
+            "$ref": "#/components/schemas/GroupStats"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "column",
+          "treated",
+          "control"
+        ],
+        "title": "PreviewColumn"
+      },
+      "PreviewRequest": {
+        "properties": {
+          "feature": {
+            "$ref": "#/components/schemas/FeatureSpec"
+          },
+          "study": {
+            "$ref": "#/components/schemas/StudySpec"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "feature",
+          "study"
+        ],
+        "title": "PreviewRequest"
+      },
+      "PreviewResult": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewColumn"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "feature",
+          "columns",
+          "issues"
+        ],
+        "title": "PreviewResult"
+      },
+      "PropensityPlot": {
+        "properties": {
+          "edges": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Edges"
+          },
+          "before": {
+            "$ref": "#/components/schemas/GroupSeries"
+          },
+          "after": {
+            "$ref": "#/components/schemas/GroupSeries"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "edges",
+          "before",
+          "after"
+        ],
+        "title": "PropensityPlot"
+      },
+      "SourceInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "granularity": {
+            "type": "string",
+            "enum": [
+              "day",
+              "month",
+              "year"
+            ],
+            "title": "Granularity"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/Coverage"
+          },
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/Named"
+            },
+            "type": "array",
+            "title": "Dimensions"
+          },
+          "measures": {
+            "items": {
+              "$ref": "#/components/schemas/MeasureInfo"
+            },
+            "type": "array",
+            "title": "Measures"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "granularity",
+          "coverage",
+          "dimensions",
+          "measures"
+        ],
+        "title": "SourceInfo"
+      },
+      "StudySpec": {
+        "properties": {
+          "exposure": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "title": "Exposure"
+          },
+          "seed": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Seed",
+            "default": 0
+          },
+          "age_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 120.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Min"
+          },
+          "age_max": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 120.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Max"
+          },
+          "person_filters": {
+            "patternProperties": {
+              "^[A-Za-z_][A-Za-z0-9_]*$": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "minItems": 1
+              }
+            },
+            "propertyNames": {
+              "maxLength": 128
+            },
+            "type": "object",
+            "title": "Person Filters",
+            "default": {}
+          },
+          "person_covariates": {
+            "items": {
+              "type": "string",
+              "maxLength": 128,
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "type": "array",
+            "title": "Person Covariates",
+            "default": []
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureSpec"
+            },
+            "type": "array",
+            "title": "Features",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "exposure"
+        ],
+        "title": "StudySpec",
+        "description": "Everything a user chooses to define one study.\n\nThe treatment group is everyone in the chosen exposure table, indexed at\ntheir exposure date. Selecting controls and giving them an index date is\npart of building the cohort, not of this spec."
+      },
+      "SurvivalPlot": {
+        "properties": {
+          "treated": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Treated"
+          },
+          "control": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Control"
+          },
+          "days": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Days"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "treated",
+          "control",
+          "days"
+        ],
+        "title": "SurvivalPlot"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "Window": {
+        "properties": {
+          "anchor": {
+            "type": "string",
+            "const": "index",
+            "title": "Anchor",
+            "default": "index"
+          },
+          "from": {
+            "type": "integer",
+            "title": "From"
+          },
+          "to": {
+            "type": "integer",
+            "title": "To"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "days",
+              "months",
+              "years"
+            ],
+            "title": "Unit"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "unit"
+        ],
+        "title": "Window",
+        "description": "A time window counted in whole units from the index date.\n\nUnit 0 is the index day itself. Positive units count forward from the day\nafter it and negative units count back from the day before it. Both\n`from` and `to` are inclusive, so:\n    from=-365, to=-1,  unit=days    the 365 days before the index date\n    from=1,    to=365, unit=days    the 365 days after it\n    from=-12,  to=-1,  unit=months  the 12 months before it\n    from=1,    to=12,  unit=months  the 12 months after it, from the next day\nFor days this simply means day k is the index date + k.\n\nThe index day belongs to neither side. An ED visit on the day of\nenrolment may be the reason for the enrolment, so it is neither a clean\nbaseline event nor an outcome of the programme.\n\nA source that records dates only by month or year cannot say where in\nthat month or year an event fell. On such a source the index date and\nthe event dates are both cut to the source's resolution before the\nwindow is applied, so unit 0 is the whole calendar month or year that\ncontains the index date, and unit k is the one k steps from it. On the\nyear-granularity condition table, from=-5, to=-1 is the five calendar\nyears before the index year. Plain date arithmetic there would let events\nfrom later in the index month or year into a window that is meant to end\nbefore the index date."
+      }
+    }
+  }
+}

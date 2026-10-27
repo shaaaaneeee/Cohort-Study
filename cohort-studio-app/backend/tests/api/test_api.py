@@ -466,3 +466,12 @@ def test_server_listens_on_host_and_port_from_the_environment(monkeypatch):
     assert started["host"] == "127.0.0.1"
     assert started["port"] == 9123
     assert started["factory"] is True
+
+
+def test_blank_settings_mean_unset(monkeypatch):
+    for name in ("MAPPING_PATH", "LLM_SCRIPT", "LLM_API_KEY", "DATABASE_URL", "LLM_PROVIDER"):
+        monkeypatch.setenv(name, "")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.mapping_path.name == "mapping.yaml"
+    assert s.llm_script is None
+    assert s.resolved_llm_provider == "demo"

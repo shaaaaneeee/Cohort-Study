@@ -66,7 +66,12 @@ class Settings(BaseSettings):
             return [o.strip().rstrip("/") for o in value.split(",") if o.strip()]
         return value
 
-    @field_validator("llm_provider", "llm_base_url", "db_sslmode", mode="before")
+    @field_validator("mapping_path", mode="before")
+    @classmethod
+    def _blank_mapping_is_default(cls, value: object) -> object:
+        return DEFAULT_MAPPING if value in ("", None) else value
+
+    @field_validator("llm_provider", "llm_base_url", "db_sslmode", "llm_script", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         return None if value == "" else value
