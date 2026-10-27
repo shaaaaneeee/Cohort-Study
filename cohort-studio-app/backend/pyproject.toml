@@ -1,0 +1,81 @@
+[project]
+name = "cohort-studio-backend"
+version = "1.0.0"
+description = "Cohort Studio API: study design, cohort building on PostgreSQL, statistics and the study assistant."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+# Exact pins. Each was checked with `pip index versions <pkg>` on 2026-10-27.
+dependencies = [
+    "anthropic==2.3.0",
+    "fastapi==0.162.0",
+    "lifelines==0.30.3",
+    "numpy==2.5.4",
+    "pandas==2.3.3",           # newest 2.x: lifelines 0.30.3 requires pandas<3
+    "psycopg[binary]==3.3.6",
+    "pydantic==2.14.1",
+    "pydantic-settings==2.16.1",
+    "PyYAML==6.0.3",
+    "scipy==1.18.1",
+    "SQLAlchemy==2.1.6",
+    "statsmodels==0.15.0",
+    "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2==2.16.0",          # Starlette's TestClient is built on httpx2
+    "mypy==2.4.0",
+    "pandas-stubs==2.3.3.260113",
+    "pytest==9.1.1",
+    "ruff==0.17.2",
+    "scipy-stubs==1.18.1.1",
+    "types-PyYAML==6.0.12.20260906",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["openapi.json"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "N", "S", "C4", "PT", "LOG", "G"]
+ignore = [
+    "S101",    # assert is how pytest tests are written
+    "S608",    # the SQL builder writes only names checked against the mapping; values are bound
+    "RUF001",  # the explanatory text uses typographic characters on purpose
+    "RUF002",
+    "RUF003",
+    "N806",    # X for a design matrix is the statistical convention
+    "N803",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311", "E501", "PT006", "PT007", "PT011", "PT012", "PT018", "B905", "RUF005", "RUF007", "RUF012", "S324", "SIM108", "C4"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.13"
+packages = ["app"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = false
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["statsmodels.*", "lifelines.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = ["db: needs PostgreSQL (TEST_DATABASE_URL)"]
+filterwarnings = ["error::pytest.PytestUnraisableExceptionWarning"]

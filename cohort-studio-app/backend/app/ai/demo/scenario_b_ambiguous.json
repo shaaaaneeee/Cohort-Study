@@ -1,0 +1,33 @@
+[
+  {
+    "text": "I can set this up, but \"help patients\" could mean several things.",
+    "tool_calls": [{"name": "ask_user", "input": {"questions": [
+      "Which outcome should show whether it helps? ED attendances are the only outcome in this dataset; for example, the number of attendances, or whether a patient attended at all.",
+      "Over what follow-up period? 12 months after enrolment is a common choice.",
+      "Should the study be limited to some patients, such as adults or patients with diabetes?"
+    ]}}]
+  },
+  {
+    "text": "Thanks. I'll use any ED attendance in the 12 months after enrolment, for adults with diabetes.",
+    "tool_calls": [{"name": "propose_study", "input": {
+      "exposure": "program_a",
+      "age_min": 18,
+      "person_covariates": ["age", "gender"],
+      "features": [
+        {"name": "diabetes", "label": "Diabetes before enrolment", "source": "condition",
+         "filters": {"condition_name": ["diabetes"]},
+         "window": {"from": -50, "to": -1, "unit": "years"},
+         "aggregation": "binary", "role": "inclusion", "keep_if": {"op": "==", "value": 1}},
+        {"name": "prior_ed", "label": "ED attendances in the 12 months before",
+         "source": "ed_episodes", "window": {"from": -12, "to": -1, "unit": "months"},
+         "aggregation": "count", "role": "covariate"},
+        {"name": "any_ed_after", "label": "Any ED attendance in the 12 months after",
+         "source": "ed_episodes", "window": {"from": 1, "to": 12, "unit": "months"},
+         "aggregation": "binary", "role": "outcome"}
+      ]
+    }}]
+  },
+  {
+    "text": "The study is ready: adults with diabetes, Programme A against matched non-members, outcome any ED attendance in the 12 months after enrolment. I also adjusted for age, gender and prior ED use. Review it in the builder before running it."
+  }
+]
