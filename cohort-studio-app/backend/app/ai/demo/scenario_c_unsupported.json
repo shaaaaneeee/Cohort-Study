@@ -1,0 +1,5 @@
+[
+  {
+    "tool_calls": [{"name": "report_unsupported", "input": {"reason": "This dataset has no hospital admission or mortality records. It holds ED attendances (with their disposition), chronic conditions and patient details. The closest study I can set up is ED attendances that ended in admission (disposition 'Admitted') in the 12 months after enrolment. Would that help?"}}]
+  }
+]
