@@ -15,6 +15,8 @@ import type {
   AnalysisResult,
   AttritionResult,
   ChatResult,
+  ChatStage,
+  Choice,
   FeatureSpec,
   ImpliedModel,
   Issue,
@@ -35,6 +37,10 @@ export interface ChatEntry {
   status?: ChatResult["status"];
   reply?: string;
   questions?: string[];
+  /** The same questions with the answers the user can click. */
+  choices?: Choice[];
+  /** Where the study is in the assistant's stages (S0 to S4). */
+  stage?: ChatStage | null;
 }
 
 export interface ChatState {
@@ -265,6 +271,8 @@ export const useStudyStore = create<StudyStore>()((set, get) => {
           status: result.status,
           reply: result.reply,
           questions: result.questions,
+          choices: result.choices,
+          stage: result.stage,
         };
         let next: ChatState = { ...get().chat, messages: [...messages, entry], busy: false };
         if (result.draft) {

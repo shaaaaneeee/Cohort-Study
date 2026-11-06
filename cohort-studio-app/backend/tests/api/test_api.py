@@ -263,7 +263,7 @@ def test_analysis_the_data_cannot_support_is_422(synthetic_client):
     response = synthetic_client.post("/api/analysis", json=synthetic_study(age_min=120))
     assert response.status_code == 422
     body = response.json()
-    assert "both groups" in body["message"]
+    assert "in each group" in body["message"]
     assert codes(body) == ["analysis_failed"]
 
 
@@ -344,18 +344,22 @@ def test_chat_model_comes_from_the_settings(values_repo):
     assert body["status"] == "unsupported"
 
 
-def test_without_a_key_the_assistant_plays_the_demo(values_repo):
-    client = make_client(values_repo)  # no LLM_API_KEY, no LLM_PROVIDER
+def test_without_a_key_the_assistant_plays_the_demo(synthetic_repo):
+    client = make_client(synthetic_repo)  # no LLM_API_KEY, no LLM_PROVIDER
     question = {"role": "user", "content": "Does Programme A reduce ED attendances?"}
     body = client.post("/api/chat", json={"messages": [question]}).json()
     assert body["status"] == "ready"
     assert body["draft"]["exposure"] == "program_a"
 
 
-def test_with_a_key_the_provider_is_anthropic():
-    assert settings(llm_api_key=SecretStr("k")).resolved_llm_provider == "anthropic"
+def test_with_a_key_the_provider_is_openai_compatible():
+    assert settings(llm_api_key=SecretStr("k")).resolved_llm_provider == "openai"
     assert settings().resolved_llm_provider == "demo"
     assert settings(llm_api_key=SecretStr("k"), llm_provider="demo").resolved_llm_provider == "demo"
+    assert (
+        settings(llm_api_key=SecretStr("k"), llm_provider="anthropic").resolved_llm_provider
+        == "anthropic"
+    )
 
 
 # ----------------------------------------------------- health and operations
@@ -475,3 +479,39 @@ def test_blank_settings_mean_unset(monkeypatch):
     assert s.mapping_path.name == "mapping.yaml"
     assert s.llm_script is None
     assert s.resolved_llm_provider == "demo"
+
+
+def test_check_blocks_a_cohort_too_small_to_run(synthetic_client):
+    body = synthetic_client.post("/api/study/check", json=synthetic_study(age_min=120)).json()
+    assert "cohort_too_small" in codes(body)
+    body = synthetic_client.post("/api/study/check", json=synthetic_study()).json()
+    assert "cohort_too_small" not in codes(body)
+
+
+def test_attrition_reports_a_cohort_too_small_to_run(synthetic_client):
+    body = synthetic_client.post("/api/attrition", json=synthetic_study(age_min=120)).json()
+    assert body["issues"][0]["code"] == "cohort_too_small"
+
+
+def test_feasibility_says_why_a_study_cannot_run(synthetic_repo):
+    from app.schemas.study import StudySpec
+    from app.services.study import StudyService
+
+    service = StudyService(synthetic_repo)
+    found = service.feasibility(StudySpec.model_validate(synthetic_study(age_min=120)))
+    assert [i["code"] for i in found] == ["cohort_too_small"]
+    found = service.feasibility(StudySpec.model_validate(synthetic_study()))
+    assert not [i for i in found if i["level"] == "error"]
+
+
+def test_feasibility_turns_an_unexpected_failure_into_a_reason(synthetic_repo, monkeypatch):
+    from app.schemas.study import StudySpec
+    from app.services import study as study_module
+    from app.services.study import StudyService
+
+    def broken(table, spec):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(study_module, "run_analysis", broken)
+    found = StudyService(synthetic_repo).feasibility(StudySpec.model_validate(synthetic_study()))
+    assert found[0]["code"] == "cannot_run"

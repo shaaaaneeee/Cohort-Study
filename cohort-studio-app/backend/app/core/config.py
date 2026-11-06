@@ -9,13 +9,13 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_MAPPING = BACKEND_DIR / "config" / "mapping.yaml"
 
-LLMProvider = Literal["anthropic", "demo", "scripted"]
+LLMProvider = Literal["openai", "anthropic", "demo", "scripted"]
 
 
 class Settings(BaseSettings):
@@ -29,7 +29,9 @@ class Settings(BaseSettings):
     log_format: Literal["json", "text"] = "json"
     # Origins allowed to call the API from a browser, comma separated. Empty
     # means none: the frontend's origin must be set explicitly.
-    cors_origins: Annotated[list[str], NoDecode] = []
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=list, validation_alias=AliasChoices("cors_origins", "frontend_origin")
+    )
     # Optional shared key. When set, every /api request must send it in the
     # X-API-Key header. See docs/deployment.md for what it does and does not protect.
     api_key: SecretStr | None = None
@@ -49,14 +51,16 @@ class Settings(BaseSettings):
     mapping_path: Path = DEFAULT_MAPPING
 
     # ---------------------------------------------------------------- LLM
-    # Left unset, the provider is "anthropic" when LLM_API_KEY is set and the
-    # scripted "demo" otherwise, so the app runs without a key.
+    # Left unset, the provider is "openai" (any OpenAI-compatible endpoint,
+    # such as the approved government gateway) when LLM_API_KEY is set, and
+    # the scripted "demo" otherwise, so the app runs without a key.
     llm_provider: LLMProvider | None = None
     llm_api_key: SecretStr | None = None
     llm_base_url: str | None = None
     llm_model: str = "claude-opus-5-5"
     llm_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
     llm_timeout_seconds: float = Field(120.0, gt=0)
+    llm_max_tokens: int = Field(8192, ge=256)
     llm_script: Path | None = None
 
     @field_validator("cors_origins", mode="before")
@@ -85,7 +89,7 @@ class Settings(BaseSettings):
     def resolved_llm_provider(self) -> LLMProvider:
         if self.llm_provider is not None:
             return self.llm_provider
-        return "anthropic" if self.llm_api_key is not None else "demo"
+        return "openai" if self.llm_api_key is not None else "demo"
 
 
 @lru_cache

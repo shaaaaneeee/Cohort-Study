@@ -13,20 +13,30 @@ including any manual edits) every time.
 """
 
 import json
+import logging
+import time
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import ValidationError
 
 from app.ai.llm.base import LLMClient
 from app.ai.prompt import system_prompt
+from app.ai.stages import current_stage
 from app.ai.tools import TOOLS
 from app.analysis.outcome_models import implied_model
-from app.analysis.validation import ValueLookup, issues_from_pydantic, validate_study
+from app.analysis.validation import (
+    ValueLookup,
+    issues_from_pydantic,
+    validate_study,
+)
 from app.core.mapping import Mapping
 from app.schemas.study import StudySpec
 
 # Model calls in one turn, including retries after a rejected proposal.
 MAX_STEPS = 8
+
+log = logging.getLogger("app.assistant")
 
 
 def converse(
@@ -36,6 +46,7 @@ def converse(
     mapping: Mapping,
     lookup: ValueLookup,
     client: LLMClient,
+    trial: Callable[[StudySpec], list[dict]] | None = None,
 ) -> dict:
     """Answer the last user message in history.
 
@@ -43,10 +54,17 @@ def converse(
     with the user. Returns:
         status     "ready" (draft has no design errors), "asking" or "unsupported"
         reply      what to show the user
-        questions  open questions, when the model asked any
+        questions  open questions, when the model asked any, as plain text
+        choices    the same questions with the options the user can click
         draft      the study so far, or None
         issues     design issues in draft
         model      the model its outcome implies, once ready
+        stage      where the study is in S0-S4 (see ai.stages), for the progress bar
+
+    trial, when given, tries to run a study and returns what stops it
+    (errors) or weakens it (warnings). A proposal that cannot run is rejected
+    with the reason, so the model tells the user why and offers what is
+    possible instead of drafting a study that would fail.
     """
     messages: list[dict[str, Any]] = []
     for m in history:
@@ -63,10 +81,21 @@ def converse(
 
     system = system_prompt(catalogue, lookup)
     texts = []
-    questions = []
+    choices: list[dict] = []
     unsupported = None
-    for _ in range(MAX_STEPS):
+    asked_stage: str | None = None
+    for number in range(1, MAX_STEPS + 1):
+        started = time.perf_counter()
         step = client.step(system, messages, TOOLS)
+        log.info(
+            "assistant step",
+            extra={
+                "step": number,
+                "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                "tools": [c.name for c in step.tool_calls],
+                "refused": step.refused,
+            },
+        )
         if step.refused:
             texts = [
                 "The assistant could not help with that request. Try rephrasing it as a "
@@ -82,15 +111,25 @@ def converse(
         finished = False
         for call in step.tool_calls:
             if call.name == "ask_user":
-                questions = list(call.input.get("questions", []))
+                choices = _choices(call.input.get("questions", []))
+                asked_stage = call.input.get("stage")
                 finished = True
             elif call.name == "report_unsupported":
                 unsupported = call.input.get("reason", "")
                 finished = True
             elif call.name == "propose_study":
-                proposed, issues = _check_proposal(call.input, mapping, lookup)
+                proposed, issues = _check_proposal(call.input, mapping, lookup, trial)
                 if proposed is not None:
                     draft = proposed
+                log.info(
+                    "assistant proposal",
+                    extra={
+                        "step": number,
+                        "accepted": proposed is not None,
+                        "errors": [i["code"] for i in issues if i["level"] == "error"],
+                        "warnings": [i["code"] for i in issues if i["level"] == "warning"],
+                    },
+                )
                 results.append(
                     _tool_result(
                         call.id,
@@ -116,7 +155,8 @@ def converse(
     result: dict[str, Any] = {
         "status": "asking",
         "reply": "\n\n".join(texts),
-        "questions": questions,
+        "questions": [c["question"] for c in choices],
+        "choices": choices,
         "draft": None,
         "issues": [],
         "model": None,
@@ -128,10 +168,21 @@ def converse(
         if not any(i["level"] == "error" for i in issues):
             outcome = next(f for f in draft.features if f.role == "outcome")
             result["model"] = implied_model(outcome)
-            if not questions and unsupported is None:
+            if not choices and unsupported is None:
                 result["status"] = "ready"
     if unsupported is not None:
         result["status"] = "unsupported"
+    result["stage"] = current_stage(draft, result["status"], asked_stage)
+    log.info(
+        "assistant turn",
+        extra={
+            "status": result["status"],
+            "stage": result["stage"]["id"],
+            "questions": len(choices),
+            "has_draft": result["draft"] is not None,
+            "errors": [i["code"] for i in result["issues"] if i["level"] == "error"],
+        },
+    )
     if not result["reply"]:
         result["reply"] = (
             "The study is ready to review."
@@ -142,9 +193,13 @@ def converse(
 
 
 def _check_proposal(
-    spec: dict, mapping: Mapping, lookup: ValueLookup
+    spec: dict,
+    mapping: Mapping,
+    lookup: ValueLookup,
+    trial: Callable[[StudySpec], list[dict]] | None = None,
 ) -> tuple[StudySpec | None, list[dict]]:
-    """The study if it is well-formed and has no design errors, and its issues either way."""
+    """The study if it is well-formed, has no design errors and (when trial is
+    given) can actually be run, and its issues either way."""
     try:
         study = StudySpec.model_validate(spec)
     except ValidationError as e:
@@ -152,7 +207,28 @@ def _check_proposal(
     issues = validate_study(study, mapping, lookup)
     if any(i["level"] == "error" for i in issues):
         return None, issues
+    if trial is not None:
+        found = trial(study)
+        if any(i["level"] == "error" for i in found):
+            return None, found + issues
+        issues = issues + [i for i in found if i not in issues]
     return study, issues
+
+
+def _choices(questions: list) -> list[dict]:
+    """ask_user's questions as {question, options}. A plain string is a question with no options."""
+    out = []
+    for q in questions:
+        if isinstance(q, str):
+            text, options = q, []
+        elif isinstance(q, dict):
+            text = str(q.get("question", ""))
+            options = [str(o) for o in q.get("options", []) or [] if str(o).strip()]
+        else:
+            continue
+        if text.strip():
+            out.append({"question": text, "options": options})
+    return out
 
 
 def _tool_result(call_id: str, content: str, error: bool = False) -> dict:

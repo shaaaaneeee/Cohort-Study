@@ -68,6 +68,7 @@ export function chatResult(overrides: Partial<ChatResult> = {}): ChatResult {
     status: "ready",
     reply: "Here is the study. Review it in the builder.",
     questions: [],
+    choices: [],
     draft: DRAFT,
     issues: [],
     model: { model: "count", measure: "Rate ratio", name: "Poisson regression", reason: "Counts." },

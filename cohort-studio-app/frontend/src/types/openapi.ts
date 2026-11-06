@@ -271,10 +271,32 @@ export interface components {
             reply: string;
             /** Questions */
             questions: string[];
+            /**
+             * Choices
+             * @default []
+             */
+            choices: components["schemas"]["Choice"][];
             draft: components["schemas"]["StudySpec"] | null;
             /** Issues */
             issues: components["schemas"]["Issue"][];
             model: components["schemas"]["ImpliedModel"] | null;
+            stage?: components["schemas"]["ChatStage"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ChatStage
+         * @description Where the study is in the assistant's stages, S0 to S4.
+         */
+        ChatStage: {
+            /** Id */
+            id: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Total */
+            total: number;
         } & {
             [key: string]: unknown;
         };
@@ -283,6 +305,21 @@ export interface components {
             /** Issues */
             issues: components["schemas"]["Issue"][];
             model: components["schemas"]["ImpliedModel"] | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * Choice
+         * @description One question from the assistant, with answers the user can click.
+         */
+        Choice: {
+            /** Question */
+            question: string;
+            /**
+             * Options
+             * @default []
+             */
+            options: string[];
         } & {
             [key: string]: unknown;
         };

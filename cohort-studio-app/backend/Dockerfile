@@ -1,13 +1,5 @@
 # syntax=docker/dockerfile:1
-#
-# Cohort Studio API.
-#
-# Base image conventions (read from the image config of
-# gdssingapore/airbase:python-3.13, which this registry path mirrors):
-#   - Debian trixie with Python 3.13 in /usr/local, pip available, no uv
-#   - WORKDIR /app, and a non-root user "app" (uid 999) whose home is /app
-#   - no USER set, so it runs as root unless told otherwise; curl is installed
-FROM registry.sgts.gitlab-dedicated.com/innersource/sgts/runtime/airbase/images/gdssingapore/airbase:python-3.13
+FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -15,10 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PORT=8000
 
+RUN useradd --uid 999 --create-home --home-dir /home/app app
+
 WORKDIR /app
 
-# Dependencies first, so code changes reuse this layer. Every package is
-# pinned with its hashes (exported from uv.lock).
 COPY requirements.txt ./
 RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
@@ -30,7 +22,6 @@ USER app
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS "http://127.0.0.1:${PORT}/health" || exit 1
+    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT','8000') + '/health', timeout=4)" || exit 1
 
-# HOST and PORT come from the environment (see app/core/config.py).
 CMD ["python", "-m", "app"]

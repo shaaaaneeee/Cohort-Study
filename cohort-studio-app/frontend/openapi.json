@@ -625,6 +625,14 @@
             "type": "array",
             "title": "Questions"
           },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/Choice"
+            },
+            "type": "array",
+            "title": "Choices",
+            "default": []
+          },
           "draft": {
             "anyOf": [
               {
@@ -651,6 +659,16 @@
                 "type": "null"
               }
             ]
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatStage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": true,
@@ -664,6 +682,36 @@
           "model"
         ],
         "title": "ChatResult"
+      },
+      "ChatStage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title",
+          "total"
+        ],
+        "title": "ChatStage",
+        "description": "Where the study is in the assistant's stages, S0 to S4."
       },
       "CheckResult": {
         "properties": {
@@ -692,6 +740,29 @@
           "model"
         ],
         "title": "CheckResult"
+      },
+      "Choice": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Options",
+            "default": []
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "Choice",
+        "description": "One question from the assistant, with answers the user can click."
       },
       "CohortSizes": {
         "properties": {

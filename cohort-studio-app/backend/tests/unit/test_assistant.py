@@ -52,6 +52,7 @@ def ask(values_repo):
         draft=None,
         history=None,
         client_class=ScriptedClient,
+        trial=None,
     ):
         client = client_class(list(steps))
         messages = (history or []) + [{"role": "user", "content": question}]
@@ -62,6 +63,7 @@ def ask(values_repo):
             values_repo.mapping,
             values_repo.dimension_values,
             client,
+            trial,
         )
         return result, client
 
@@ -92,6 +94,8 @@ def test_scenario_b_ambiguous_question_asks_before_drafting(ask):
     assert first["status"] == "asking"
     assert first["draft"] is None
     assert len(first["questions"]) == 3
+    assert [len(c["options"]) for c in first["choices"]] == [3, 3, 3]
+    assert first["questions"][0] == first["choices"][0]["question"]
 
     history = [
         {"role": "user", "content": "Does Programme A help patients?"},
@@ -264,3 +268,83 @@ def test_the_demo_picks_a_scenario_from_the_question_and_replays_it(values_repo)
     )
     assert second["status"] == "ready"
     assert second["model"]["model"] == "logistic"
+
+
+def test_questions_can_carry_options():
+    from app.services.assistant import _choices
+
+    out = _choices(
+        [
+            {"question": "Which outcome?", "options": ["ED visits", "Any ED visit"]},
+            "Adults only?",
+            {"question": "  "},
+            42,
+        ]
+    )
+    assert out == [
+        {"question": "Which outcome?", "options": ["ED visits", "Any ED visit"]},
+        {"question": "Adults only?", "options": []},
+    ]
+
+
+def test_a_study_that_cannot_run_is_sent_back_to_the_model(ask):
+    asks = {
+        "text": "That study isn't possible: only 3 patients match.",
+        "tool_calls": [
+            {
+                "name": "ask_user",
+                "input": {
+                    "questions": [
+                        {
+                            "question": "How should I widen the cohort?",
+                            "options": ["Drop the diabetes criterion", "Widen the age range"],
+                        }
+                    ]
+                },
+            }
+        ],
+    }
+    blocked = [
+        {
+            "level": "error",
+            "code": "cohort_too_small",
+            "message": "The cohort has 3 treated patients and 50 controls.",
+            "feature": None,
+        }
+    ]
+    result, client = ask([propose(GOOD_STUDY), asks], trial=lambda study: blocked)
+    feedback = last_tool_results(client, 1)
+    assert feedback["accepted"] is False
+    assert feedback["issues"][0]["code"] == "cohort_too_small"
+    assert result["status"] == "asking"
+    assert result["draft"] is None
+    assert "isn't possible" in result["reply"]
+    assert result["choices"][0]["options"] == ["Drop the diabetes criterion", "Widen the age range"]
+
+
+def test_trial_warnings_are_passed_on_and_the_study_accepted(ask):
+    warning = {"level": "warning", "code": "imbalance", "message": "age", "feature": None}
+    result, client = ask([propose(GOOD_STUDY), {"text": "Ready."}], trial=lambda s: [warning])
+    assert result["status"] == "ready"
+    assert warning in last_tool_results(client, 1)["issues"]
+
+
+def test_without_a_trial_the_study_is_accepted(ask):
+    result, _ = ask([propose(GOOD_STUDY), {"text": "Ready."}], trial=lambda study: [])
+    assert result["status"] == "ready"
+
+
+def test_each_turn_reports_its_stage(ask):
+    result, _ = ask([propose(GOOD_STUDY), {"text": "Ready."}])
+    assert result["stage"]["id"] == "review"
+    asking = {
+        "text": "",
+        "tool_calls": [
+            {
+                "name": "ask_user",
+                "input": {"questions": [{"question": "Which outcome?"}], "stage": "outcome"},
+            }
+        ],
+    }
+    result, _ = ask([asking])
+    assert result["stage"] == {"id": "outcome", "number": 3, "title": "Outcome", "total": 5}

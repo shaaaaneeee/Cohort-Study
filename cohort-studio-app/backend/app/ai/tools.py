@@ -6,12 +6,13 @@ schema itself, so the model is held to exactly the format the builder uses.
 
     propose_study       submit a whole study; answered with its design issues
     list_values         the values of one dimension, when the prompt lists only some
-    ask_user            end the turn with questions for the user
+    ask_user            end the turn with questions for the user, each with clickable options
     report_unsupported  end the turn saying the data cannot answer the question
 """
 
 from typing import Any
 
+from app.ai.stages import STAGE_IDS
 from app.schemas.study import StudySpec
 
 TOOLS: list[dict[str, Any]] = [
@@ -39,18 +40,39 @@ TOOLS: list[dict[str, Any]] = [
         "name": "ask_user",
         "description": (
             "End your turn by asking the user the questions needed to complete the study. "
-            "Ask only what you cannot reasonably settle yourself, at most four questions, each "
-            "with a suggested default where one exists."
+            "Ask only what you cannot reasonably settle yourself, at most four questions. "
+            "Where the answer is a choice, give 2 to 5 short options the user can click, "
+            "suggested default first, each a complete answer on its own (for example "
+            "'ED attendances in the 12 months after'). The user can always type something "
+            "else, so do not add an 'other' option."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
                 "questions": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string"},
+                            "options": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "minItems": 2,
+                                "maxItems": 5,
+                            },
+                        },
+                        "required": ["question"],
+                        "additionalProperties": False,
+                    },
                     "minItems": 1,
                     "maxItems": 4,
-                }
+                },
+                "stage": {
+                    "type": "string",
+                    "enum": STAGE_IDS,
+                    "description": "The stage the questions are about.",
+                },
             },
             "required": ["questions"],
             "additionalProperties": False,
