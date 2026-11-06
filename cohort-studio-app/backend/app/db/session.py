@@ -9,6 +9,7 @@ docs/db-setup.md.
 
 import datetime as dt
 import logging
+import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -77,6 +78,10 @@ def query_runner(engine: Engine) -> QueryRunner:
     """
 
     def run(query: str, params: Mapping[str, object]) -> pd.DataFrame:
+        started = time.perf_counter()
+        # The SQL text only at DEBUG: it can be long. Parameter values are never
+        # logged, only how many there are.
+        log.debug("query sql", extra={"sql": query, "param_count": len(params)})
         try:
             with engine.connect() as connection:
                 result = connection.execute(text(query), dict(params))
@@ -88,6 +93,14 @@ def query_runner(engine: Engine) -> QueryRunner:
         except DBAPIError as e:
             log.exception("query failed")
             raise DataSourceError("The database could not run the query.") from e
+        log.info(
+            "query",
+            extra={
+                "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                "rows": len(rows),
+                "columns": len(columns),
+            },
+        )
         return to_frame(rows, columns)
 
     return run

@@ -37,6 +37,7 @@ from lifelines.statistics import proportional_hazard_test
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 
 from app.analysis.validation import issue
+from app.core.exceptions import AnalysisError
 from app.schemas.study import FeatureSpec, feature_columns
 
 # Pearson chi-square divided by its degrees of freedom is 1 when counts vary
@@ -101,14 +102,21 @@ def fit_outcome(
     kind = implied_model(outcome)["model"]
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        if kind == "logistic":
-            result = _logistic(data, outcome, covariates, groups)
-        elif kind == "count":
-            result = _count(data, outcome, covariates, groups)
-        elif kind == "cox":
-            result = _cox(data, outcome, covariates, groups)
-        else:
-            result = _gee(data, outcome, covariates, groups)
+        try:
+            if kind == "logistic":
+                result = _logistic(data, outcome, covariates, groups)
+            elif kind == "count":
+                result = _count(data, outcome, covariates, groups)
+            elif kind == "cox":
+                result = _cox(data, outcome, covariates, groups)
+            else:
+                result = _gee(data, outcome, covariates, groups)
+        except (np.linalg.LinAlgError, ValueError, ZeroDivisionError) as e:
+            raise AnalysisError(
+                f"The outcome model could not be fitted on the {len(data)} matched "
+                f"patients. The cohort is too small or too uniform (for example, nobody "
+                f"or everybody has the outcome). Widen the cohort or use fewer covariates."
+            ) from e
 
     for w in caught:
         if issubclass(w.category, (ConvergenceWarning, LifelinesConvergenceWarning)):

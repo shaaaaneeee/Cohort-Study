@@ -582,6 +582,26 @@ def check_feature_variation(name: str, values: pd.Series, max_share: float = 0.9
     return []
 
 
+# The fewest patients per group a study needs before it can be run. Below this
+# the propensity and outcome models cannot be fitted reliably (or at all).
+MIN_GROUP_SIZE = 20
+
+
+def check_cohort_size(treated: int, control: int, minimum: int = MIN_GROUP_SIZE) -> list[dict]:
+    """An error when either group is too small to analyse."""
+    if treated >= minimum and control >= minimum:
+        return []
+    return [
+        issue(
+            "error",
+            "cohort_too_small",
+            f"The cohort has {treated} treated patients and {control} controls; at least "
+            f"{minimum} in each group are needed to run the analysis. Widen the cohort: "
+            f"remove or loosen an inclusion criterion or person filter, or widen the age range.",
+        )
+    ]
+
+
 def check_small_cells(counts: dict[str, int], threshold: int = 5) -> list[dict]:
     """Warn about any count to be reported that falls below the disclosure threshold.
 

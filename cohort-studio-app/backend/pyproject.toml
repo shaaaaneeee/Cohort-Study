@@ -7,6 +7,7 @@ requires-python = ">=3.13,<3.14"
 # Exact pins. Each was checked with `pip index versions <pkg>` on 2026-10-27.
 dependencies = [
     "anthropic==2.3.0",
+    "openai==3.42.1",
     "fastapi==0.162.0",
     "lifelines==0.30.3",
     "numpy==2.5.4",

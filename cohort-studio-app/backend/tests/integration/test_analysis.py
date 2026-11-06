@@ -238,7 +238,7 @@ def test_patients_with_missing_covariates_are_left_out_with_a_warning():
 
 def test_a_cohort_with_only_one_group_is_refused():
     table, spec = small_table()
-    with pytest.raises(AnalysisError, match="both groups"):
+    with pytest.raises(AnalysisError, match="in each group"):
         run_analysis(table[table["exposure"] == 1], spec)
 
 

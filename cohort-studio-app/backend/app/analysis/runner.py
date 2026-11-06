@@ -19,7 +19,13 @@ from app.analysis.matching import (
     propensity_scores,
 )
 from app.analysis.outcome_models import fit_outcome, implied_model
-from app.analysis.validation import check_events_per_covariate, check_small_cells, issue
+from app.analysis.validation import (
+    MIN_GROUP_SIZE,
+    check_cohort_size,
+    check_events_per_covariate,
+    check_small_cells,
+    issue,
+)
 from app.core.exceptions import AnalysisError
 from app.schemas.study import FeatureSpec, StudySpec, feature_columns
 
@@ -72,17 +78,19 @@ def run_analysis(table: pd.DataFrame, spec: StudySpec) -> dict:
     exposure = table["exposure"].to_numpy()
     n_treated = int((exposure == 1).sum())
     n_control = int((exposure == 0).sum())
-    if n_treated == 0 or n_control == 0:
-        raise AnalysisError(
-            f"The cohort needs both groups; it has {n_treated} treated "
-            f"patients and {n_control} controls."
-        )
+    too_small = check_cohort_size(n_treated, n_control)
+    if too_small:
+        raise AnalysisError(too_small[0]["message"])
 
     if X.shape[1] > 0:
         scores = propensity_scores(X, exposure)
         pairs = match_pairs(scores, exposure, spec.seed)
-        if not pairs:
-            raise AnalysisError("No treated patient has a control close enough to match.")
+        if len(pairs) < MIN_GROUP_SIZE:
+            raise AnalysisError(
+                f"Only {len(pairs)} treated patients have a control close enough to match; "
+                f"at least {MIN_GROUP_SIZE} matched pairs are needed. Widen the cohort or "
+                f"use fewer covariates."
+            )
         rows = []
         groups = []
         for k, (t, c) in enumerate(pairs):

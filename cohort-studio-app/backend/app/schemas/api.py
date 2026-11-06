@@ -222,13 +222,32 @@ class AnalysisResult(Response):
     plots: Plots
 
 
+class Choice(Response):
+    """One question from the assistant, with answers the user can click."""
+
+    question: str
+    options: list[str] = []
+
+
+class ChatStage(Response):
+    """Where the study is in the assistant's stages, S0 to S4."""
+
+    id: str
+    number: int
+    title: str
+    total: int
+
+
 class ChatResult(Response):
     status: Literal["ready", "asking", "unsupported"]
     reply: str
+    # The questions as plain text, and the same questions with their options.
     questions: list[str]
+    choices: list[Choice] = []
     draft: StudySpec | None
     issues: list[Issue]
     model: ImpliedModel | None
+    stage: ChatStage | None = None
 
 
 class Health(Response):

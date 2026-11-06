@@ -18,7 +18,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApi } from "../../api/context";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useStudyStore, type ChatEntry } from "../../store/studyStore";
+import type { Choice } from "../../types";
 import { DraftCard } from "./DraftCard";
+import { Markdown } from "./Markdown";
+import { StageProgress } from "./StageProgress";
 
 const EXAMPLES = [
   "Does Programme A reduce ED attendances in the 12 months after enrolment, adjusting for prior ED use, age and gender?",
@@ -26,40 +29,154 @@ const EXAMPLES = [
   "Does Programme A reduce mortality?",
 ];
 
-function AssistantMessage({ entry }: { entry: ChatEntry }) {
-  const paragraphs = (entry.reply ?? entry.content).split(/\n{2,}/).filter(Boolean);
+/**
+ * The assistant's questions with answers to click. One question: a click sends
+ * the answer. Several: pick an answer for any of them and send them together;
+ * a question left out keeps the default the assistant suggested. Typing in
+ * the message box still works for anything the options do not cover.
+ */
+function QuestionChoices({
+  choices,
+  disabled,
+  onAnswer,
+}: {
+  choices: Choice[];
+  disabled: boolean;
+  onAnswer: (message: string) => void;
+}) {
+  const [picked, setPicked] = useState<Record<number, string>>({});
+  const single = choices.length === 1;
+  const answered = Object.keys(picked).length;
+
+  function pick(index: number, option: string) {
+    if (single) {
+      onAnswer(option);
+      return;
+    }
+    setPicked((current) => {
+      // Clicking the chosen option again clears that answer.
+      if (current[index] === option) {
+        return Object.fromEntries(Object.entries(current).filter(([key]) => Number(key) !== index));
+      }
+      return { ...current, [index]: option };
+    });
+  }
+
+  function sendPicked() {
+    const lines = choices
+      .map((_, i) => (picked[i] === undefined ? null : `${i + 1}. ${picked[i]}`))
+      .filter((line): line is string => line !== null);
+    if (lines.length) onAnswer(lines.join("\n"));
+  }
+
+  return (
+    <Stack spacing={1.5} sx={{ mt: 1 }}>
+      {choices.map((choice, i) => (
+        <Box key={i}>
+          <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.75 }}>
+            {single ? "" : `${i + 1}. `}
+            {choice.question}
+          </Typography>
+          {choice.options.length > 0 && (
+            <Stack
+              direction="row"
+              sx={{ flexWrap: "wrap", gap: 1 }}
+              role="group"
+              aria-label={choice.question}
+            >
+              {choice.options.map((option) => {
+                const selected = picked[i] === option;
+                return (
+                  <Chip
+                    key={option}
+                    label={option}
+                    clickable
+                    disabled={disabled}
+                    color={selected ? "primary" : "default"}
+                    variant={selected ? "filled" : "outlined"}
+                    aria-pressed={single ? undefined : selected}
+                    onClick={() => {
+                      pick(i, option);
+                    }}
+                    sx={{ height: "auto", py: 0.5, "& .MuiChip-label": { whiteSpace: "normal" } }}
+                  />
+                );
+              })}
+            </Stack>
+          )}
+        </Box>
+      ))}
+      <Stack
+        direction="row"
+        spacing={1.5}
+        sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}
+      >
+        <Typography variant="caption" color="text.secondary">
+          {single
+            ? "Pick an answer, or type your own below."
+            : "Pick answers for any questions, or type your own below. Skipped questions use the default the assistant suggests."}
+        </Typography>
+        {!single && (
+          <Button
+            size="small"
+            variant="contained"
+            disabled={disabled || answered === 0}
+            onClick={sendPicked}
+          >
+            {answered > 1 ? `Send ${answered} answers` : "Send answer"}
+          </Button>
+        )}
+      </Stack>
+    </Stack>
+  );
+}
+
+function AssistantMessage({
+  entry,
+  interactive,
+  busy,
+  onAnswer,
+}: {
+  entry: ChatEntry;
+  interactive: boolean;
+  busy: boolean;
+  onAnswer: (message: string) => void;
+}) {
+  const text = entry.reply ?? entry.content;
   if (entry.status === "unsupported") {
     return (
       <Alert severity="info" variant="outlined">
         <AlertTitle>This dataset can't answer that</AlertTitle>
-        {paragraphs.map((p, i) => (
-          <Typography key={i} variant="body2" sx={{ mb: 0.5 }}>
-            {p}
-          </Typography>
-        ))}
+        <Markdown text={text} />
       </Alert>
     );
   }
+  const choices = entry.choices ?? [];
+  const clickable = interactive && choices.some((c) => c.options.length > 0);
   return (
     <Box>
-      {paragraphs.map((p, i) => (
-        <Typography key={i} variant="body2" sx={{ mb: 1, whiteSpace: "pre-wrap" }}>
-          {p}
-        </Typography>
-      ))}
-      {entry.questions && entry.questions.length > 0 && (
-        <>
-          <List dense sx={{ listStyle: "decimal", pl: 3 }}>
-            {entry.questions.map((q, i) => (
-              <ListItem key={i} sx={{ display: "list-item", py: 0.25 }}>
-                <Typography variant="body2">{q}</Typography>
-              </ListItem>
-            ))}
-          </List>
-          <Typography variant="caption" color="text.secondary">
-            Answer by number, in any order. Skip any and the assistant uses the default it suggests.
-          </Typography>
-        </>
+      <Markdown text={text} />
+      {clickable ? (
+        <QuestionChoices choices={choices} disabled={busy} onAnswer={onAnswer} />
+      ) : (
+        entry.questions &&
+        entry.questions.length > 0 && (
+          <>
+            <List dense sx={{ listStyle: "decimal", pl: 3 }}>
+              {entry.questions.map((q, i) => (
+                <ListItem key={i} sx={{ display: "list-item", py: 0.25 }}>
+                  <Typography variant="body2">{q}</Typography>
+                </ListItem>
+              ))}
+            </List>
+            {interactive && (
+              <Typography variant="caption" color="text.secondary">
+                Answer by number, in any order. Skip any and the assistant uses the default it
+                suggests.
+              </Typography>
+            )}
+          </>
+        )
       )}
     </Box>
   );
@@ -97,6 +214,7 @@ export function ChatPanel() {
   const input = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const started = chat.messages.length > 0 || chat.busy;
+  const latest = [...chat.messages].reverse().find((m) => m.role === "assistant");
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "nearest" });
@@ -138,6 +256,10 @@ export function ChatPanel() {
         </Stack>
       )}
 
+      {latest?.stage && latest.status !== "unsupported" && (
+        <StageProgress stage={latest.stage} ready={latest.status === "ready"} />
+      )}
+
       <Stack spacing={2} component="ol" sx={{ p: 0, m: 0, listStyle: "none" }} aria-live="polite">
         {chat.messages.map((m, i) =>
           m.role === "user" ? (
@@ -158,7 +280,14 @@ export function ChatPanel() {
           ) : (
             <Box component="li" key={i}>
               <FromAssistant>
-                <AssistantMessage entry={m} />
+                <AssistantMessage
+                  entry={m}
+                  interactive={i === chat.messages.length - 1}
+                  busy={chat.busy}
+                  onAnswer={(answer) => {
+                    void send(answer);
+                  }}
+                />
               </FromAssistant>
             </Box>
           ),

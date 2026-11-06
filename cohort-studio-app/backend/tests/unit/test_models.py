@@ -198,3 +198,13 @@ def test_treating_repeated_measures_as_independent_understates_uncertainty():
     gee_width = np.log(gee["ci_high"]) - np.log(gee["ci_low"])
     naive_low, naive_high = naive.conf_int().loc["exposure"]
     assert gee_width > 1.5 * (naive_high - naive_low)
+
+
+def test_a_cohort_too_small_to_fit_raises_a_clear_error():
+    from app.core.exceptions import AnalysisError
+
+    binary = outcome(aggregation="binary")
+    column = binary.name
+    data = pd.DataFrame({"exposure": [1, 0], "x": [1.0, 0.0], column: [1, 1]})
+    with pytest.raises(AnalysisError, match="could not be fitted"):
+        fit_outcome(data, binary, ["x"], np.array([0, 0]))
