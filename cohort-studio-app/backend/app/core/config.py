@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Optional shared key. When set, every /api request must send it in the
     # X-API-Key header. See docs/deployment.md for what it does and does not protect.
     api_key: SecretStr | None = None
+    # Optional. When set, the study tools are also served to AI assistants
+    # (e.g. Databricks Genie Code) over MCP at /mcp, and every MCP request must
+    # send "Authorization: Bearer <MCP_TOKEN>". Unset: no /mcp endpoint.
+    mcp_token: SecretStr | None = None
 
     # ----------------------------------------------------------- database
     # Either DATABASE_URL, or the separate DB_* settings below.
@@ -80,7 +84,9 @@ class Settings(BaseSettings):
     def _blank_is_unset(cls, value: object) -> object:
         return None if value == "" else value
 
-    @field_validator("llm_api_key", "api_key", "database_url", "db_password", mode="before")
+    @field_validator(
+        "llm_api_key", "api_key", "mcp_token", "database_url", "db_password", mode="before"
+    )
     @classmethod
     def _blank_secret_is_unset(cls, value: object) -> object:
         return None if value == "" else value

@@ -9,7 +9,7 @@ on PostgreSQL from the settings; tests pass their own.
 
 import logging
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager, nullcontext
 
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +26,7 @@ from app.core.mapping import load_mapping
 from app.db.dialect import PostgresDialect
 from app.db.repositories.cohort import CohortRepository, SqlCohortRepository
 from app.db.session import create_db_engine, ping, query_runner
+from app.mcp_server import build_mcp, mcp_asgi_app
 from app.services.study import StudyService
 
 log = logging.getLogger(__name__)
@@ -51,6 +52,18 @@ def create_app(
             def db_check() -> None:
                 ping(engine)
 
+    study_service = StudyService(repository)
+
+    # The study tools for AI assistants (e.g. Databricks Genie Code), only when
+    # MCP_TOKEN is set. Built here so the lifespan can run its session manager.
+    mcp_app = None
+    if settings.mcp_token is not None:
+        mcp = build_mcp(study_service)
+        mcp_app = mcp_asgi_app(mcp, settings.mcp_token.get_secret_value())
+
+    def mcp_running() -> AbstractAsyncContextManager[object]:
+        return mcp.session_manager.run() if mcp_app is not None else nullcontext()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info(
@@ -61,7 +74,8 @@ def create_app(
                 "llm_provider": settings.resolved_llm_provider,
             },
         )
-        yield
+        async with mcp_running():
+            yield
         if engine is not None:
             engine.dispose()
 
@@ -75,7 +89,7 @@ def create_app(
         redoc_url=None,
     )
     app.state.settings = settings
-    app.state.study_service = StudyService(repository)
+    app.state.study_service = study_service
     app.state.llm_client = llm_client
     app.state.db_check = db_check or (lambda: None)
 
@@ -97,4 +111,6 @@ def create_app(
     api.include_router(chat.router)
     app.include_router(api)
     app.include_router(health.router)
+    if mcp_app is not None:
+        app.mount("/mcp", mcp_app)
     return app
