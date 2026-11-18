@@ -88,5 +88,5 @@ Changing these needs a restart, not a rebuild.
 
 Both run as non-root (`app` uid 999 for the backend, `node` uid 1000 for the
 frontend), carry no secrets, install dependencies in their own cached layer
-(backend: `requirements.txt` with hashes, exported from `uv.lock`; frontend:
+(backend: `requirements.lock.txt` with hashes, exported from `uv.lock`; frontend:
 `npm ci` from `package-lock.json`), and declare a `HEALTHCHECK`.

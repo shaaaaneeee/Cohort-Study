@@ -24,7 +24,10 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------- server
     app_env: Literal["development", "test", "production"] = "production"
     host: str = "0.0.0.0"  # noqa: S104 - inside a container the app must listen on all interfaces
-    port: int = Field(8000, ge=1, le=65535)
+    # A Databricks App must listen on the port the platform gives it.
+    port: int = Field(
+        8000, ge=1, le=65535, validation_alias=AliasChoices("databricks_app_port", "port")
+    )
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_format: Literal["json", "text"] = "json"
     # Origins allowed to call the API from a browser, comma separated. Empty
@@ -39,6 +42,11 @@ class Settings(BaseSettings):
     # (e.g. Databricks Genie Code) over MCP at /mcp, and every MCP request must
     # send "Authorization: Bearer <MCP_TOKEN>". Unset: no /mcp endpoint.
     mcp_token: SecretStr | None = None
+    # True only where the platform in front of the app already signs in every
+    # caller, as Databricks Apps does (only users and agents of the workspace
+    # reach the app). /mcp is then served without MCP_TOKEN. Never set this on
+    # a service the internet can reach.
+    mcp_platform_auth: bool = False
 
     # ----------------------------------------------------------- database
     # Either DATABASE_URL, or the separate DB_* settings below.
@@ -53,6 +61,9 @@ class Settings(BaseSettings):
     db_max_overflow: int = Field(5, ge=0)
     db_statement_timeout_ms: int = Field(120_000, ge=1000)
     mapping_path: Path = DEFAULT_MAPPING
+    # The Databricks SQL warehouse to read from, when the mapping's backend
+    # dialect is "databricks" (config/mapping.databricks.yaml).
+    databricks_warehouse_id: str | None = None
 
     # ---------------------------------------------------------------- LLM
     # Left unset, the provider is "openai" (any OpenAI-compatible endpoint,
@@ -79,7 +90,14 @@ class Settings(BaseSettings):
     def _blank_mapping_is_default(cls, value: object) -> object:
         return DEFAULT_MAPPING if value in ("", None) else value
 
-    @field_validator("llm_provider", "llm_base_url", "db_sslmode", "llm_script", mode="before")
+    @field_validator(
+        "llm_provider",
+        "llm_base_url",
+        "db_sslmode",
+        "llm_script",
+        "databricks_warehouse_id",
+        mode="before",
+    )
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         return None if value == "" else value
@@ -90,6 +108,10 @@ class Settings(BaseSettings):
     @classmethod
     def _blank_secret_is_unset(cls, value: object) -> object:
         return None if value == "" else value
+
+    @property
+    def mcp_enabled(self) -> bool:
+        return self.mcp_token is not None or self.mcp_platform_auth
 
     @property
     def resolved_llm_provider(self) -> LLMProvider:

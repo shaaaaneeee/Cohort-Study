@@ -90,3 +90,23 @@ def test_a_bad_study_comes_back_as_issues(synthetic_repo):
         bad = call(client, "check_study", {"study": {"exposure": "no_such_programme"}})
         assert bad["ok"] is False
         assert bad["issues"]
+
+
+def test_behind_databricks_apps_no_token_is_needed(synthetic_repo):
+    # Databricks Apps signs every caller in before the request reaches the app.
+    plain = {k: v for k, v in HEADERS.items() if k != "Authorization"}
+    with make_client(synthetic_repo, mcp_platform_auth=True) as client:
+        initialize(client)
+        tools = rpc(client, "tools/list", headers=plain).json()["result"]["tools"]
+        assert len(tools) == 4
+
+
+def test_the_url_without_a_trailing_slash_works(synthetic_repo):
+    with make_client(synthetic_repo, mcp_token=TOKEN) as client:
+        response = client.post(
+            "/mcp",
+            headers=HEADERS,
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            follow_redirects=False,
+        )
+        assert response.status_code == 200, response.text

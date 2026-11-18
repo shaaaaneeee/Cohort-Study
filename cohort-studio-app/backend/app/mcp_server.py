@@ -11,8 +11,9 @@ Every tool goes through StudyService, the same code the web app uses, so the
 assistant gets the same tested method and the same checks. It never sends or
 receives SQL, and never sees patient-level rows: only counts and results.
 
-Enabled only when MCP_TOKEN is set; every request must then carry
-"Authorization: Bearer <MCP_TOKEN>".
+Enabled when MCP_TOKEN is set (every request must then carry
+"Authorization: Bearer <MCP_TOKEN>"), or when MCP_PLATFORM_AUTH is set because
+the platform in front of the app signs callers in itself (Databricks Apps).
 """
 
 import hmac
@@ -59,7 +60,8 @@ def _failure(e: Exception) -> dict[str, Any]:
     if isinstance(e, AnalysisError):
         return {"ok": False, "error": str(e)}
     if isinstance(e, DataSourceError):
-        return {"ok": False, "error": "The database could not be reached. Try again later."}
+        # Our own messages (which part failed), never the driver's details.
+        return {"ok": False, "error": f"{e} Try again later."}
     raise e
 
 
@@ -73,7 +75,10 @@ def build_mcp(service: StudyService) -> MCPServer:
         Call this first. The study schema accepted by check_study and run_study
         is in 'study_schema'.
         """
-        return clean({**service.metadata(), "study_schema": StudySpec.model_json_schema()})
+        try:
+            return clean({**service.metadata(), "study_schema": StudySpec.model_json_schema()})
+        except Exception as e:
+            return _failure(e)
 
     @mcp.tool()
     def list_values(source: str, dimension: str) -> dict[str, Any]:
@@ -85,6 +90,8 @@ def build_mcp(service: StudyService) -> MCPServer:
             return {"ok": True, "values": service.dimension_values(source, dimension)}
         except LookupError as e:
             return {"ok": False, "error": str(e)}
+        except Exception as e:
+            return _failure(e)
 
     @mcp.tool()
     def check_study(study: dict[str, Any]) -> Any:
@@ -154,12 +161,30 @@ class BearerAuth:
         await self.app(scope, receive, send)
 
 
-def mcp_asgi_app(mcp: MCPServer, token: str) -> ASGIApp:
+class TrailingSlash:
+    """Serves POST /mcp as /mcp/ instead of redirecting.
+
+    A redirect behind a proxy can point at the wrong scheme or host, and some
+    clients drop the Authorization header when they follow it.
+    """
+
+    def __init__(self, app: ASGIApp, path: str = "/mcp"):
+        self.app = app
+        self.path = path
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope["path"] == self.path:
+            scope = {**scope, "path": self.path + "/", "raw_path": (self.path + "/").encode()}
+        await self.app(scope, receive, send)
+
+
+def mcp_asgi_app(mcp: MCPServer, token: str | None) -> ASGIApp:
     """The MCP endpoint as an app to mount at /mcp.
 
     Stateless and JSON responses, so it runs behind any load balancer. The
     host check is off because the service sits behind a proxy with its own
-    domain; the bearer token is what protects it.
+    domain; the bearer token (or the platform's sign-in, when token is None)
+    is what protects it.
     """
     app = mcp.streamable_http_app(
         streamable_http_path="/",
@@ -167,4 +192,4 @@ def mcp_asgi_app(mcp: MCPServer, token: str) -> ASGIApp:
         json_response=True,
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
-    return BearerAuth(app, token)
+    return app if token is None else BearerAuth(app, token)
