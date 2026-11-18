@@ -1,0 +1,20 @@
+# Runs this backend as a Databricks App, serving the study tools to Genie Code
+# over MCP at /mcp. Steps: docs/databricks-app.md.
+#
+# There is deliberately no requirements.txt in this folder: without one,
+# Databricks installs from pyproject.toml + uv.lock with Python 3.13.
+command: ["uv", "run", "--frozen", "--no-dev", "python", "-m", "app"]
+
+env:
+  # Read the copy of the tables in Unity Catalog (workspace.cohort.*).
+  - name: MAPPING_PATH
+    value: config/mapping.databricks.yaml
+  # The SQL warehouse added to the app as a resource with the key "sql-warehouse".
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  # Databricks signs in every caller before a request reaches the app, so
+  # /mcp needs no token of its own here.
+  - name: MCP_PLATFORM_AUTH
+    value: "true"
+  - name: LOG_FORMAT
+    value: text

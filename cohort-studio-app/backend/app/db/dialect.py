@@ -1,4 +1,4 @@
-"""SQL fragments that differ between database engines, for PostgreSQL.
+"""SQL fragments that differ between database engines: PostgreSQL and Databricks.
 
 The SQL generator (queries.py) calls these instead of writing date functions
 itself, so another engine needs another class with the same methods and
@@ -95,3 +95,68 @@ class PostgresDialect:
         which sorts by byte value).
         """
         return f'{expr} COLLATE "C"'
+
+
+class DatabricksDialect:
+    """Databricks SQL (a SQL warehouse reading Unity Catalog tables).
+
+    Every method gives the same answer as PostgresDialect for the same data,
+    so a study run on the copy of the tables in Databricks picks the same
+    patients, the same index dates and the same matches.
+    """
+
+    name = "databricks"
+
+    def param(self, key: str) -> str:
+        """Named parameter marker, bound by the Databricks SQL connector."""
+        return f":{key}"
+
+    def text(self, expr: str) -> str:
+        return f"CAST({expr} AS STRING)"
+
+    def real(self, expr: str) -> str:
+        return f"CAST({expr} AS DOUBLE)"
+
+    def add_days(self, date: str, n: int) -> str:
+        return f"date_add({date}, {int(n)})"
+
+    def add_months(self, date: str, n: int) -> str:
+        # Clamps month ends, like PostgresDialect.add_months.
+        return f"add_months({date}, {int(n)})"
+
+    def year(self, date: str) -> str:
+        return f"year({date})"
+
+    def month_number(self, date: str) -> str:
+        return f"(year({date}) * 12 + month({date}) - 1)"
+
+    def days_between(self, start: str, end: str) -> str:
+        return f"datediff({end}, {start})"
+
+    def age_years(self, birth: str, at: str) -> str:
+        # Completed years, the same as PostgreSQL's age(): a year is counted
+        # once the birthday (month and day) has been reached.
+        return (
+            f"(year({at}) - year({birth})"
+            f" - CASE WHEN month({at}) * 100 + day({at})"
+            f" < month({birth}) * 100 + day({birth}) THEN 1 ELSE 0 END)"
+        )
+
+    def random_draw(self, expr: str, seed: int, n: str) -> str:
+        """The same number as PostgresDialect.random_draw: md5, first 8 hex digits, mod n, + 1."""
+        digest = f"md5(concat({self.text(expr)}, ':', '{int(seed)}'))"
+        number = f"CAST(conv(substr({digest}, 1, 8), 16, 10) AS BIGINT)"
+        return f"(pmod({number}, {n}) + 1)"
+
+    def sort_key(self, expr: str) -> str:
+        # Databricks compares strings by byte value (UTF8_BINARY) by default.
+        return expr
+
+
+def dialect_for(name: str) -> Dialect:
+    """The dialect a mapping's backend names."""
+    dialects: dict[str, Dialect] = {
+        "postgres": PostgresDialect(),
+        "databricks": DatabricksDialect(),
+    }
+    return dialects[name]

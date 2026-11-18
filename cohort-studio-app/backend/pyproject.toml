@@ -20,6 +20,9 @@ dependencies = [
     "SQLAlchemy==2.1.6",
     "statsmodels==0.15.0",
     "uvicorn==0.54.0",
+    "mcp==2.3.0",
+    "databricks-sql-connector[pyarrow]==4.9.0",  # Databricks SQL warehouse (DATA_SOURCE=databricks)
+    "databricks-sdk==0.167.0",           # Databricks auth (inside a Databricks App)
 ]
 
 [dependency-groups]

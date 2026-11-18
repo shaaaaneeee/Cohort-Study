@@ -11,8 +11,11 @@ RUN useradd --uid 999 --create-home --home-dir /home/app app
 
 WORKDIR /app
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir --require-hashes -r requirements.txt
+# Not "requirements.txt": a Databricks App built from this folder would install
+# that file with its own older Python. Without it, the App installs from
+# pyproject.toml and uv.lock with Python 3.13 (see docs/databricks-app.md).
+COPY requirements.lock.txt ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock.txt
 
 COPY --chown=app:app app ./app
 COPY --chown=app:app config ./config

@@ -9,7 +9,7 @@ on PostgreSQL from the settings; tests pass their own.
 
 import logging
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager, nullcontext
 
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,9 +23,11 @@ from app.core.config import Settings, get_settings
 from app.core.errors import register_error_handlers
 from app.core.logs import configure_logging, request_logging
 from app.core.mapping import load_mapping
-from app.db.dialect import PostgresDialect
+from app.db.databricks import databricks_ping, databricks_runner
+from app.db.dialect import dialect_for
 from app.db.repositories.cohort import CohortRepository, SqlCohortRepository
 from app.db.session import create_db_engine, ping, query_runner
+from app.mcp_server import TrailingSlash, build_mcp, mcp_asgi_app
 from app.services.study import StudyService
 
 log = logging.getLogger(__name__)
@@ -44,12 +46,34 @@ def create_app(
     engine: Engine | None = None
     if repository is None:
         mapping = load_mapping(settings.mapping_path)
-        engine = create_db_engine(settings)
-        repository = SqlCohortRepository(mapping, PostgresDialect(), query_runner(engine))
-        if db_check is None:
+        dialect = dialect_for(mapping.backend.dialect)
+        if dialect.name == "databricks":
+            run = databricks_runner(settings)
+            db_check = db_check or databricks_ping(run)
+        else:
+            engine = create_db_engine(settings)
+            run = query_runner(engine)
+            if db_check is None:
+                postgres = engine
 
-            def db_check() -> None:
-                ping(engine)
+                def db_check() -> None:
+                    ping(postgres)
+
+        repository = SqlCohortRepository(mapping, dialect, run)
+
+    study_service = StudyService(repository)
+
+    # The study tools for AI assistants (e.g. Databricks Genie Code), only when
+    # MCP_TOKEN or MCP_PLATFORM_AUTH is set. Built here so the lifespan can run
+    # its session manager.
+    mcp_app = None
+    if settings.mcp_enabled:
+        mcp = build_mcp(study_service)
+        token = settings.mcp_token.get_secret_value() if settings.mcp_token else None
+        mcp_app = mcp_asgi_app(mcp, token)
+
+    def mcp_running() -> AbstractAsyncContextManager[object]:
+        return mcp.session_manager.run() if mcp_app is not None else nullcontext()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -61,7 +85,8 @@ def create_app(
                 "llm_provider": settings.resolved_llm_provider,
             },
         )
-        yield
+        async with mcp_running():
+            yield
         if engine is not None:
             engine.dispose()
 
@@ -75,7 +100,7 @@ def create_app(
         redoc_url=None,
     )
     app.state.settings = settings
-    app.state.study_service = StudyService(repository)
+    app.state.study_service = study_service
     app.state.llm_client = llm_client
     app.state.db_check = db_check or (lambda: None)
 
@@ -97,4 +122,7 @@ def create_app(
     api.include_router(chat.router)
     app.include_router(api)
     app.include_router(health.router)
+    if mcp_app is not None:
+        app.mount("/mcp", mcp_app)
+        app.add_middleware(TrailingSlash)
     return app
