@@ -10,7 +10,7 @@ for.
 |---|---|
 | `frontend/` | React + Vite + TypeScript + MUI web app (own Dockerfile) |
 | `backend/` | FastAPI service: API, database access, statistics, study assistant (own Dockerfile) |
-| `docs/` | [architecture](docs/architecture.md), [deployment](docs/deployment.md), [database setup](docs/db-setup.md) |
+| `docs/` | [architecture](docs/architecture.md), [deployment](docs/deployment.md), [database setup](docs/db-setup.md), [Databricks App and MCP](docs/databricks-app.md) |
 | `docker-compose.yml` | Local development: frontend, backend, and a seeded mock PostgreSQL |
 
 The original proof of concept is in `../legacy/`, unchanged, for comparison.
