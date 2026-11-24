@@ -4,8 +4,11 @@ An assistant such as Databricks Genie Code connects to /mcp and can call:
 
     describe_data   what the data holds: exposures, sources, filters, outcomes
     list_values     the allowed values of one filter
-    check_study     validate a study definition, with patient counts per step
-    run_study       run the full analysis (matching + outcome model)
+    review_study    what a draft still leaves open, as questions with options
+    check_study     validate a study, with patient counts, a plain-English
+                    summary and a confirmation code
+    run_study       run the full analysis (matching + outcome model), only
+                    with the confirmation code of the study the user confirmed
 
 Every tool goes through StudyService, the same code the web app uses, so the
 assistant gets the same tested method and the same checks. It never sends or
@@ -29,6 +32,8 @@ from app.analysis.validation import issues_from_pydantic
 from app.core.exceptions import AnalysisError, DataSourceError, StudyError
 from app.core.jsonsafe import clean
 from app.schemas.study import StudySpec
+from app.services.clarify import confirmation_code as study_code
+from app.services.clarify import review, summary
 from app.services.study import StudyService
 
 log = logging.getLogger(__name__)
@@ -36,14 +41,22 @@ log = logging.getLogger(__name__)
 INSTRUCTIONS = """\
 Tools for observational cohort studies on the Cohort Studio data: does an
 exposure (e.g. a programme) change an outcome (e.g. ED attendances)?
-Start with describe_data. A study is a JSON object (StudySpec): exposure,
-optional age limits and person filters, person covariates, and features (each
-a covariate, inclusion criterion or exactly one outcome). Use check_study to
-validate a draft and see how many patients remain, then run_study to get the
-matched estimate. Prefer these tools over writing your own matching code: they
-use a fixed, tested method (propensity score matching, then the outcome model
-the outcome type calls for). If the question is vague, ask the user which
-outcome, follow-up, covariates and population they want before running."""
+Use these tools for any such question instead of writing your own analysis:
+they use a fixed, tested method (propensity score matching, then the outcome
+model the outcome type calls for).
+
+Always follow these steps, in order:
+1. describe_data, to learn the data and the study format (StudySpec).
+2. review_study with your draft (it may be partial). It lists what is still
+   open: outcome, follow-up, covariates, population.
+3. Ask the user every open question, showing its options and default. Never
+   choose for the user and never assume; wait for their answers. Apply each
+   answer to the draft as the option says.
+4. check_study. Fix any errors. Show the user its summary and the patient
+   counts, and ask them to confirm.
+5. Only after the user confirms, run_study with the same study and the
+   confirmation_code from check_study.
+Report the estimate, its 95% CI and p-value, and the warnings, in plain words."""
 
 
 def _study(study: dict[str, Any]) -> StudySpec | dict[str, Any]:
@@ -94,11 +107,32 @@ def build_mcp(service: StudyService) -> MCPServer:
             return _failure(e)
 
     @mcp.tool()
+    def review_study(study: dict[str, Any]) -> Any:
+        """List what a draft study still leaves open, as questions to ask the user.
+
+        Call this before check_study. The draft may be partial, even {}. Each
+        question has options; an option either sets fields ("set"), adds a
+        feature ("add_feature") or sets the outcome window ("outcome_window").
+        Ask the user every question and apply their answers; do not choose.
+        """
+        try:
+            meta = service.metadata()
+            try:
+                conditions = service.dimension_values("condition", "condition_name")
+            except LookupError:
+                conditions = []
+            return clean({"ok": True, **review(study or {}, meta, conditions)})
+        except Exception as e:
+            return _failure(e)
+
+    @mcp.tool()
     def check_study(study: dict[str, Any]) -> Any:
         """Validate a study definition and count the patients left after each eligibility step.
 
         Returns design issues (errors must be fixed before running), the outcome
-        model the study implies, and the treated/control counts per step.
+        model the study implies, the treated/control counts per step, a plain-
+        English summary to show the user, and the confirmation_code run_study
+        needs once the user has confirmed.
         """
         spec = _study(study)
         if isinstance(spec, dict):
@@ -107,20 +141,39 @@ def build_mcp(service: StudyService) -> MCPServer:
             checked = service.check(spec)
             if any(i["level"] == "error" for i in checked["issues"]):
                 return clean({"ok": False, **checked})
-            return clean({"ok": True, **checked, "attrition": service.attrition(spec)})
+            return clean(
+                {
+                    "ok": True,
+                    **checked,
+                    "attrition": service.attrition(spec),
+                    "summary": summary(spec, service.metadata()),
+                    "confirmation_code": study_code(spec),
+                    "next": "Show the user the summary and counts and ask them to confirm. "
+                    "Only then call run_study with this confirmation_code.",
+                }
+            )
         except Exception as e:
             return _failure(e)
 
     @mcp.tool()
-    def run_study(study: dict[str, Any]) -> Any:
+    def run_study(study: dict[str, Any], confirmation_code: str) -> Any:
         """Run the full analysis: propensity score matching, balance check, outcome model.
 
-        Returns the effect estimate with its 95% CI and p-value, a plain-English
-        interpretation, cohort sizes, covariate balance and warnings.
+        Only for a study the user has confirmed: pass the confirmation_code that
+        check_study returned for this exact study. Returns the effect estimate
+        with its 95% CI and p-value, a plain-English interpretation, cohort
+        sizes, covariate balance and warnings.
         """
         spec = _study(study)
         if isinstance(spec, dict):
             return spec
+        if confirmation_code != study_code(spec):
+            return {
+                "ok": False,
+                "error": "This study has not been confirmed. Call check_study, show the user "
+                "its summary, ask them to confirm, then pass its confirmation_code. If the "
+                "study changed after check_study, check it again.",
+            }
         try:
             log.info("mcp run_study")
             return clean({"ok": True, **service.analysis(spec)})

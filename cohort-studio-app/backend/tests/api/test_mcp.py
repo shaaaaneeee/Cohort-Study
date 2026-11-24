@@ -62,6 +62,7 @@ def test_the_tools_are_listed(synthetic_repo):
         assert {t["name"] for t in tools} == {
             "describe_data",
             "list_values",
+            "review_study",
             "check_study",
             "run_study",
         }
@@ -78,8 +79,10 @@ def test_the_tools_answer_like_the_app(synthetic_repo):
         checked = call(client, "check_study", {"study": synthetic_study()})
         assert checked["ok"] is True
         assert checked["attrition"]["steps"]
+        assert checked["summary"]
 
-        result = call(client, "run_study", {"study": synthetic_study()})
+        code = checked["confirmation_code"]
+        result = call(client, "run_study", {"study": synthetic_study(), "confirmation_code": code})
         assert result["ok"] is True
         assert "estimate" in json.dumps(result)
 
@@ -98,7 +101,7 @@ def test_behind_databricks_apps_no_token_is_needed(synthetic_repo):
     with make_client(synthetic_repo, mcp_platform_auth=True) as client:
         initialize(client)
         tools = rpc(client, "tools/list", headers=plain).json()["result"]["tools"]
-        assert len(tools) == 4
+        assert len(tools) == 5
 
 
 def test_the_url_without_a_trailing_slash_works(synthetic_repo):
@@ -110,3 +113,43 @@ def test_the_url_without_a_trailing_slash_works(synthetic_repo):
             follow_redirects=False,
         )
         assert response.status_code == 200, response.text
+
+
+def test_a_vague_draft_comes_back_as_questions(synthetic_repo):
+    with make_client(synthetic_repo, mcp_token=TOKEN) as client:
+        initialize(client)
+        reviewed = call(client, "review_study", {"study": {"exposure": "program_a"}})
+        ids = [q["id"] for q in reviewed["open_questions"]]
+        assert ids == ["outcome", "follow_up", "covariates", "population"]
+        assert all(q["options"] for q in reviewed["open_questions"])
+        assert "Ask the user" in reviewed["next"]
+
+        complete = call(client, "review_study", {"study": synthetic_study()})
+        assert complete["complete"] is True
+
+
+def test_an_option_applied_gives_a_valid_study(synthetic_repo):
+    with make_client(synthetic_repo, mcp_token=TOKEN) as client:
+        initialize(client)
+        reviewed = call(client, "review_study", {"study": {"exposure": "program_a"}})
+        questions = {q["id"]: q for q in reviewed["open_questions"]}
+        study = {"exposure": "program_a", "features": []}
+        study["features"].append(questions["outcome"]["options"][0]["add_feature"])
+        study.update(questions["covariates"]["options"][0]["set"])
+        assert call(client, "check_study", {"study": study})["ok"] is True
+
+
+def test_run_study_needs_the_confirmation_of_that_exact_study(synthetic_repo):
+    with make_client(synthetic_repo, mcp_token=TOKEN) as client:
+        initialize(client)
+        unconfirmed = call(
+            client, "run_study", {"study": synthetic_study(), "confirmation_code": "x"}
+        )
+        assert unconfirmed["ok"] is False
+        assert "not been confirmed" in unconfirmed["error"]
+
+        code = call(client, "check_study", {"study": synthetic_study()})["confirmation_code"]
+        changed = {**synthetic_study(), "seed": 99}
+        assert (
+            call(client, "run_study", {"study": changed, "confirmation_code": code})["ok"] is False
+        )
