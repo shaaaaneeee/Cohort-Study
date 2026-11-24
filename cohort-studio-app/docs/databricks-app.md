@@ -25,10 +25,11 @@ What makes this work:
 ## Steps
 
 1. **Pull the repo into Databricks.** Workspace → your folder → Create → Git
-   folder → the GitHub URL, branch `feat/databricks-app` (or `main` once merged).
+   folder → the GitHub URL, branch `main`.
    A private repo needs GitHub linked under Settings → Linked accounts.
 2. **Create the app.** Compute → Apps → Create app → Custom. Name it
-   `cohort-studio-mcp`. Under App resources add a **SQL warehouse** (the
+   `mcp-cohort-study`: the name must start with `mcp-` for Databricks to list it
+   as an MCP server. Under App resources add a **SQL warehouse** (the
    Serverless Starter Warehouse), permission *Can use*, resource key
    `sql-warehouse`. Create.
 3. **Let the app read the tables.** On the app's page, Authorization tab, copy
@@ -42,9 +43,16 @@ What makes this work:
 4. **Deploy.** App page → Deploy → source folder
    `/Workspace/Users/<you>/<git folder>/cohort-studio-app/backend`. When it shows
    *Running*, the Logs tab should end with `Uvicorn running`.
-5. **Connect Genie Code.** Genie Code → Settings → MCP Servers → Add server →
-   Custom app → `cohort-studio-mcp`. Ask it something such as "Use the
-   cohort-studio tools: does Programme A reduce ED attendances in 12 months?"
+5. **Allow the workspace in CORS.** Set `CORS_ORIGINS` in `app.yaml` to the
+   workspace URL (Genie Code calls `/mcp` from the browser), then deploy again.
+6. **Connect an agent.**
+   - Genie Code: settings → Customizations → Connectors → Add MCP server →
+     Custom MCP server → `mcp-cohort-study` → Save.
+   - AI Playground: Tools → Add tool → MCP Servers → Custom MCP Server →
+     `mcp-cohort-study`.
+
+   Ask something vague such as "Does Programme A help patients?": the agent
+   should call `review_study` and ask you before it runs anything.
 
 To update after a code change: pull in the Git folder, then Deploy again.
 

@@ -153,3 +153,20 @@ def test_run_study_needs_the_confirmation_of_that_exact_study(synthetic_repo):
         assert (
             call(client, "run_study", {"study": changed, "confirmation_code": code})["ok"] is False
         )
+
+
+def test_a_browser_agent_on_the_workspace_page_may_call_it(synthetic_repo):
+    # Genie Code calls /mcp from the workspace page, so the browser asks first.
+    origin = "https://workspace.example.com"
+    with make_client(synthetic_repo, mcp_platform_auth=True, cors_origins=[origin]) as client:
+        response = client.options(
+            "/mcp/",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type,mcp-protocol-version",
+            },
+        )
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == origin
+        assert response.headers["access-control-allow-credentials"] == "true"
