@@ -16,5 +16,9 @@ env:
   # /mcp needs no token of its own here.
   - name: MCP_PLATFORM_AUTH
     value: "true"
+  # Genie Code calls /mcp from the workspace page in the browser, so the
+  # workspace's address must be an allowed origin. Change it for another workspace.
+  - name: CORS_ORIGINS
+    value: https://dbc-0bb9dc69-9647.cloud.databricks.com
   - name: LOG_FORMAT
     value: text
