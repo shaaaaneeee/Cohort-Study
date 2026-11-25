@@ -76,7 +76,20 @@ signs in as a service principal:
 4. **Use it.** Genie One → Customizations → Connectors: the five tools appear.
    For a Genie Agent: Configure → Resources → Connectors → Add.
 
-## 3. Test
+## 3. Moving to another workspace (Healix)
+
+Every line to change is marked `HEALIX` (search for it):
+
+| File | What to change |
+| --- | --- |
+| `backend/app.yaml` | `CORS_ORIGINS`: the new workspace URL |
+| `backend/config/mapping.yaml` | The `workspace.cohort.` prefix on the four tables; with real data, also the marked column names and coverage dates |
+| `notebooks/load_synthetic_data.py` | The catalog and schema widgets (synthetic data only) |
+
+Then redo, in the new workspace: section 1 steps 1–6 and section 2. Check
+first that its Apps can install packages from PyPI: the deploy downloads them.
+
+## 4. Test
 
 Ask something vague, such as "Does Programme A help patients?". The agent
 should call `describe_data` and `review_study`, ask the open questions, show

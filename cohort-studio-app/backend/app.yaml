@@ -11,6 +11,7 @@ env:
     valueFrom: sql-warehouse
   # Genie Code calls /mcp from the workspace page in the browser, so the
   # workspace's address must be an allowed origin. Change it for another workspace.
+  # HEALIX: replace with the Healix workspace URL (https://..., no trailing slash).
   - name: CORS_ORIGINS
     value: https://dbc-0bb9dc69-9647.cloud.databricks.com
   - name: LOG_FORMAT

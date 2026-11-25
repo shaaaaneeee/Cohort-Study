@@ -14,6 +14,9 @@
 
 # COMMAND ----------
 
+# HEALIX: set these to the catalog and schema you may write to on Healix
+# (the widgets at the top of the notebook), and use the same pair in
+# backend/config/mapping.yaml.
 dbutils.widgets.text("catalog", "workspace")
 dbutils.widgets.text("schema", "cohort")
 dbutils.widgets.text("patients", "2000")

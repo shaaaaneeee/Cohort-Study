@@ -8,6 +8,12 @@
 # that prefix (catalog.schema) on the four tables below, or point
 # MAPPING_PATH at another file.
 #
+# HEALIX: search this file for "HEALIX" and change each marked line.
+#   - Synthetic data (loaded with the notebook): change only the
+#     "workspace.cohort." prefix on the four tables to <healix_catalog>.<healix_schema>.
+#   - Real data: also change each marked column name to the real column, and
+#     the coverage dates to the dates the real extract covers.
+#
 # This file holds no connection settings and no secrets: the app reads
 # through the SQL warehouse added as its resource (see app.yaml).
 
@@ -17,10 +23,10 @@ backend:
   dialect: databricks
 
 person:
-  table: workspace.cohort.master_patient
-  id: patient_id
-  birth_date: date_of_birth
-  attributes: [ethnicity, gender, residence_status]
+  table: workspace.cohort.master_patient          # HEALIX: <catalog>.<schema>.<patient table>
+  id: patient_id                                  # HEALIX (real data): patient ID column
+  birth_date: date_of_birth                       # HEALIX (real data): date of birth column
+  attributes: [ethnicity, gender, residence_status]  # HEALIX (real data): demographic columns
 
 # coverage: the dates a table is complete for. Patients whose look-back or
 # follow-up window falls outside it are excluded, because missing data there
@@ -29,21 +35,23 @@ person:
 
 condition:
   label: Chronic conditions
-  table: workspace.cohort.chronic_conditions
-  id: patient_id
-  concept: condition_name
-  date: diagnosis_year          # the year as a number
+  table: workspace.cohort.chronic_conditions      # HEALIX: <catalog>.<schema>.<conditions table>
+  id: patient_id                                  # HEALIX (real data): patient ID column
+  concept: condition_name                         # HEALIX (real data): condition name column
+  date: diagnosis_year          # the year as a number. HEALIX (real data): diagnosis year column
   granularity: year
-  coverage: { end: 2025-12-31 } # holds every diagnosis ever made, up to the extract
+  coverage: { end: 2025-12-31 } # holds every diagnosis up to the extract. HEALIX (real data): extract end date
 
 sources:
   - name: ed_episodes
     label: ED attendances
-    table: workspace.cohort.ed_episodes
-    id: patient_id
-    date: attendance_date
+    table: workspace.cohort.ed_episodes           # HEALIX: <catalog>.<schema>.<ED table>
+    id: patient_id                                # HEALIX (real data): patient ID column
+    date: attendance_date                         # HEALIX (real data): attendance date column
     granularity: day
-    coverage: { start: 2018-01-01, end: 2025-12-31 }
+    coverage: { start: 2018-01-01, end: 2025-12-31 }  # HEALIX (real data): dates the extract covers
+    # HEALIX (real data): the filter columns (dimensions) and numeric columns
+    # (measures) below must be real columns of the ED table; rename or remove.
     dimensions:
       mode_of_arrival: { label: "Mode of arrival", values: auto }
       triage_level:    { label: "Triage acuity",   values: auto }
@@ -54,6 +62,6 @@ sources:
 exposure:
   - name: program_a
     label: Programme A
-    table: workspace.cohort.program_members
-    id: patient_id
-    index_date: enrollment_date
+    table: workspace.cohort.program_members       # HEALIX: <catalog>.<schema>.<programme table>
+    id: patient_id                                # HEALIX (real data): patient ID column
+    index_date: enrollment_date                   # HEALIX (real data): enrolment date column
