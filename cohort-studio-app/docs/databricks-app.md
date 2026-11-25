@@ -1,16 +1,15 @@
 # Deploying the MCP server on Databricks
 
 The server runs as a Databricks App built from `cohort-studio-app/backend`. It
-reads the cohort tables in Unity Catalog (`workspace.cohort.*`) through a SQL
-warehouse and serves the study tools at `/mcp`.
+reads the cohort tables in Unity Catalog (`workspace.cohort.*` by default)
+through a SQL warehouse and serves the study tools at `/mcp`.
 
 What makes this work:
 
 - `backend/app.yaml`: the start command and settings for the App.
-- `config/mapping.databricks.yaml`: the tables, with `dialect: databricks`.
+- `config/mapping.yaml`: the four tables, by full name (`catalog.schema.table`).
 - `app/db/dialect.py` (`DatabricksDialect`) and `app/db/databricks.py`: the
-  date functions and the query runner for a SQL warehouse. A full study run on
-  Spark SQL and on PostgreSQL with the same data gives identical results.
+  date functions and the query runner for a SQL warehouse.
 - No `requirements.txt` in `backend/`: with one, Databricks would install with
   Python 3.11, which the pinned packages do not support. Without it, Databricks
   installs from `pyproject.toml` + `uv.lock` with Python 3.13.
@@ -22,11 +21,16 @@ What makes this work:
 1. **Pull the repo.** Workspace → your folder → Create → Git folder → the
    GitHub URL, branch `main`. A private repo needs GitHub linked under
    Settings → Linked accounts. To update later: open the Git folder → Pull.
-2. **Create the app.** Compute → Apps → Create app → Custom. Name it
+2. **Load the data.** Open `cohort-studio-app/notebooks/load_synthetic_data.py`,
+   set the `catalog` and `schema` widgets (default `workspace` / `cohort`) →
+   Run all. It writes the four synthetic tables, replacing any already there.
+   For another catalog or schema, change the `workspace.cohort.` prefix of the
+   four tables in `backend/config/mapping.yaml` to match.
+3. **Create the app.** Compute → Apps → Create app → Custom. Name it
    `mcp-cohort-study`: the name must start with `mcp-` for Databricks to list
    it as an MCP server. Under App resources add a **SQL warehouse**, permission
    *Can use*, resource key `sql-warehouse`.
-3. **Let the app read the tables.** Copy the app's service principal ID
+4. **Let the app read the tables.** Copy the app's service principal ID
    (Authorization tab). In the SQL editor:
 
    ```sql
@@ -34,9 +38,9 @@ What makes this work:
    GRANT USE SCHEMA, SELECT ON SCHEMA workspace.cohort TO `<app service principal ID>`;
    ```
 
-4. **Allow the workspace in CORS.** Set `CORS_ORIGINS` in `app.yaml` to the
+5. **Allow the workspace in CORS.** Set `CORS_ORIGINS` in `app.yaml` to the
    workspace URL (Genie Code calls `/mcp` from the browser).
-5. **Deploy.** App page → Deploy → source folder
+6. **Deploy.** App page → Deploy → source folder
    `/Workspace/Users/<you>/<git folder>/cohort-studio-app/backend`. When it shows
    *Running*, the Logs tab ends with `Uvicorn running`. Free Edition stops idle
    apps: Start it again if a connection reports HTTP 503.
@@ -87,5 +91,5 @@ a summary to confirm, and only then call `run_study`.
 | HTTP 401 from Unity Gateway | The caller service principal lacks **Can Use** on the app. |
 | "Failed to generate OAuth token" in an agent | The platform's sign-in between agent and app; retry, or reconnect the connector. |
 | Tools answer "No Databricks credentials" | Not running as an App, or the app has no service principal yet. |
-| Tools answer "SQL warehouse could not run the query" | Missing grants (deploy step 3), or the warehouse resource key is not `sql-warehouse`. |
-| "DATABRICKS_WAREHOUSE_ID is not set" | The SQL warehouse resource was not added (deploy step 2). |
+| Tools answer "SQL warehouse could not run the query" | Missing grants (deploy step 4), tables not loaded (step 2), the table names in `mapping.yaml` don't match the catalog and schema, or the warehouse resource key is not `sql-warehouse`. |
+| "DATABRICKS_WAREHOUSE_ID is not set" | The SQL warehouse resource was not added (deploy step 3). |

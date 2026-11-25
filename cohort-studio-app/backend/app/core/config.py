@@ -35,24 +35,13 @@ class Settings(BaseSettings):
     # Databricks signs in every caller before a request reaches the app.
     mcp_token: SecretStr | None = None
 
-    # ----------------------------------------------------------- database
-    # The mapping decides the database: config/mapping.databricks.yaml reads a
-    # Databricks SQL warehouse (DATABRICKS_WAREHOUSE_ID), config/mapping.yaml
-    # PostgreSQL, for local runs and tests (DATABASE_URL or the DB_* settings).
-    database_url: SecretStr | None = None
-    db_host: str = "localhost"
-    db_port: int = 5432
-    db_name: str = "cohort"
-    db_user: str = "cohort_app"
-    db_password: SecretStr | None = None
-    db_sslmode: str | None = None
-    db_pool_size: int = Field(5, ge=1)
-    db_max_overflow: int = Field(5, ge=0)
-    db_statement_timeout_ms: int = Field(120_000, ge=1000)
+    # --------------------------------------------------------------- data
+    # The tables to read (config/mapping.yaml by default). Point MAPPING_PATH
+    # at another file when the tables live under another catalog or schema.
     mapping_path: Path = DEFAULT_MAPPING
-    # The Databricks SQL warehouse to read from, when the mapping's backend
-    # dialect is "databricks" (config/mapping.databricks.yaml).
+    # The SQL warehouse to read through: the app resource "sql-warehouse".
     databricks_warehouse_id: str | None = None
+    db_statement_timeout_ms: int = Field(120_000, ge=1000)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -66,16 +55,12 @@ class Settings(BaseSettings):
     def _blank_mapping_is_default(cls, value: object) -> object:
         return DEFAULT_MAPPING if value in ("", None) else value
 
-    @field_validator(
-        "db_sslmode",
-        "databricks_warehouse_id",
-        mode="before",
-    )
+    @field_validator("databricks_warehouse_id", mode="before")
     @classmethod
     def _blank_is_unset(cls, value: object) -> object:
         return None if value == "" else value
 
-    @field_validator("mcp_token", "database_url", "db_password", mode="before")
+    @field_validator("mcp_token", mode="before")
     @classmethod
     def _blank_secret_is_unset(cls, value: object) -> object:
         return None if value == "" else value

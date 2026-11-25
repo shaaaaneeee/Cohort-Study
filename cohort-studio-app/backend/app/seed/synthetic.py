@@ -1,7 +1,7 @@
 """Synthetic data with a known programme effect and a known selection bias.
 
 The statistics are tested by running them on data where the right answer is
-known in advance. This module produces the four tables of ddl.sql for a
+known in advance. This module produces the four cohort tables for a
 made-up population in which:
 
   - ED attendance rate rises with age and with chronic conditions.
@@ -29,7 +29,10 @@ a run of ED visits. With controls drawn from people who never enrolled, that
 kind of selection leaves bias that adjusting for prior ED use does not fully
 remove, and this data does not reproduce it.
 
-    python -m cohort_studio.synthetic data/synthetic --patients 20000 --seed 7
+Load it into Databricks with notebooks/load_synthetic_data.py, or write CSV
+files to upload yourself:
+
+    python -m app.seed.synthetic out/ --patients 2000 --seed 7
 """
 
 import argparse
@@ -203,7 +206,7 @@ def generate(
 
 
 def write_csv(tables: dict[str, pd.DataFrame], out_dir: str | Path) -> list[Path]:
-    """Write each table to <out_dir>/<table>.csv, ready for the loader."""
+    """Write each table to <out_dir>/<table>.csv."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     paths = []

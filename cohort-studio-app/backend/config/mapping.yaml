@@ -3,17 +3,21 @@
 # Table and column names must be plain identifiers (letters, digits,
 # underscores). Tables may be qualified as schema.table or catalog.schema.table.
 #
-# This file holds no connection settings and no secrets. The database to
-# connect to comes from the environment (DATABASE_URL or DB_*); see
-# docs/deployment.md. Set MAPPING_PATH to use a different file.
+# The tables are in Unity Catalog under workspace.cohort, where
+# notebooks/load_synthetic_data.py writes them. In another workspace, change
+# that prefix (catalog.schema) on the four tables below, or point
+# MAPPING_PATH at another file.
+#
+# This file holds no connection settings and no secrets: the app reads
+# through the SQL warehouse added as its resource (see app.yaml).
 
 dataset: my_study
 
 backend:
-  dialect: postgres
+  dialect: databricks
 
 person:
-  table: cohort.master_patient
+  table: workspace.cohort.master_patient
   id: patient_id
   birth_date: date_of_birth
   attributes: [ethnicity, gender, residence_status]
@@ -25,7 +29,7 @@ person:
 
 condition:
   label: Chronic conditions
-  table: cohort.chronic_conditions
+  table: workspace.cohort.chronic_conditions
   id: patient_id
   concept: condition_name
   date: diagnosis_year          # the year as a number
@@ -35,7 +39,7 @@ condition:
 sources:
   - name: ed_episodes
     label: ED attendances
-    table: cohort.ed_episodes
+    table: workspace.cohort.ed_episodes
     id: patient_id
     date: attendance_date
     granularity: day
@@ -50,6 +54,6 @@ sources:
 exposure:
   - name: program_a
     label: Programme A
-    table: cohort.program_members
+    table: workspace.cohort.program_members
     id: patient_id
     index_date: enrollment_date

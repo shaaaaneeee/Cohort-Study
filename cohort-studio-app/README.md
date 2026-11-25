@@ -29,7 +29,7 @@ agent ── MCP ──> app/mcp_server.py            the five tools
                  app/services/clarify.py      open questions, summary, confirmation code
                  app/analysis/validation.py   design rules and cohort size
                  app/db/queries.py            SQL generation (names from the mapping, values bound)
-                 app/db/dialect.py            Databricks SQL (or PostgreSQL locally)
+                 app/db/dialect.py            Databricks SQL date functions
                  app/db/databricks.py         SQL warehouse runner
                  app/analysis/                matching and outcome models
 ```
@@ -40,19 +40,17 @@ agent ── MCP ──> app/mcp_server.py            the five tools
 |---|---|
 | `backend/app/` | The server (Python, FastAPI + MCP) |
 | `backend/app.yaml` | The Databricks App's start command and settings |
-| `backend/config/mapping.databricks.yaml` | The tables in Unity Catalog (`workspace.cohort.*`) |
-| `backend/config/mapping.yaml` | The same tables in PostgreSQL, for local runs and tests |
-| `backend/app/seed/` | The synthetic test data, and loading it into PostgreSQL |
-| `backend/tests/` | Tests (PostgreSQL) |
-| `docs/databricks-app.md` | Deploying on Databricks and connecting agents |
+| `backend/config/mapping.yaml` | The tables in Unity Catalog (`workspace.cohort.*`); change the prefix for another catalog or schema |
+| `backend/app/seed/synthetic.py` | The synthetic test data, with a planted effect (rate ratio 0.70) and selection bias |
+| `notebooks/load_synthetic_data.py` | Databricks notebook: writes the synthetic tables into a catalog and schema |
+| `docs/databricks-app.md` | Loading the data, deploying, and connecting agents |
 
-## Develop locally
+## Try it in a new workspace
 
-```sh
-cd backend
-uv sync
-TEST_DATABASE_URL=postgresql://user:pass@localhost/cohort_test uv run pytest
-```
+1. Pull this repo as a Git folder.
+2. Run `notebooks/load_synthetic_data.py` (set the catalog and schema widgets).
+3. Deploy `backend/` as a Databricks App: [docs/databricks-app.md](docs/databricks-app.md).
 
-All data is synthetic. The earlier web app and study assistant are kept on the
-`archive/web-app-and-assistant` branch.
+All data is synthetic. Earlier versions are kept on branches:
+`archive/web-app-and-assistant` (the web app and its study assistant) and
+`archive/mcp-with-postgres-tests` (PostgreSQL support and the test suite).
