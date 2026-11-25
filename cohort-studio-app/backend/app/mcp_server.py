@@ -1,4 +1,4 @@
-"""The study tools, served to AI assistants over MCP.
+"""The study tools, served to AI agents over MCP.
 
 An assistant such as Databricks Genie Code connects to /mcp and can call:
 
@@ -10,13 +10,12 @@ An assistant such as Databricks Genie Code connects to /mcp and can call:
     run_study       run the full analysis (matching + outcome model), only
                     with the confirmation code of the study the user confirmed
 
-Every tool goes through StudyService, the same code the web app uses, so the
-assistant gets the same tested method and the same checks. It never sends or
-receives SQL, and never sees patient-level rows: only counts and results.
+Every tool goes through StudyService, so every agent gets the same tested
+method and the same checks. It never sends or receives SQL, and never sees
+patient-level rows: only counts and results.
 
-Enabled when MCP_TOKEN is set (every request must then carry
-"Authorization: Bearer <MCP_TOKEN>"), or when MCP_PLATFORM_AUTH is set because
-the platform in front of the app signs callers in itself (Databricks Apps).
+In a Databricks App the platform signs in every caller. Elsewhere, set
+MCP_TOKEN and every request must carry "Authorization: Bearer <MCP_TOKEN>".
 """
 
 import hmac
@@ -60,7 +59,7 @@ Report the estimate, its 95% CI and p-value, and the warnings, in plain words.""
 
 
 def _study(study: dict[str, Any]) -> StudySpec | dict[str, Any]:
-    """The study, or an error answer the assistant can act on."""
+    """The study, or an error answer the agent can act on."""
     try:
         return StudySpec.model_validate(study)
     except ValidationError as e:

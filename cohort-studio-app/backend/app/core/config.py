@@ -1,8 +1,7 @@
 """Settings, all from environment variables (or a .env file in development).
 
-Every variable is documented in backend/.env.example and docs/deployment.md.
-Nothing here has a secret default: the database password and the LLM key
-must come from the environment.
+Every variable is documented in backend/.env.example. Nothing here has a
+secret default.
 """
 
 from functools import lru_cache
@@ -14,8 +13,6 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_MAPPING = BACKEND_DIR / "config" / "mapping.yaml"
-
-LLMProvider = Literal["openai", "anthropic", "demo", "scripted"]
 
 
 class Settings(BaseSettings):
@@ -30,26 +27,18 @@ class Settings(BaseSettings):
     )
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_format: Literal["json", "text"] = "json"
-    # Origins allowed to call the API from a browser, comma separated. Empty
-    # means none: the frontend's origin must be set explicitly.
-    cors_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=list, validation_alias=AliasChoices("cors_origins", "frontend_origin")
-    )
-    # Optional shared key. When set, every /api request must send it in the
-    # X-API-Key header. See docs/deployment.md for what it does and does not protect.
-    api_key: SecretStr | None = None
-    # Optional. When set, the study tools are also served to AI assistants
-    # (e.g. Databricks Genie Code) over MCP at /mcp, and every MCP request must
-    # send "Authorization: Bearer <MCP_TOKEN>". Unset: no /mcp endpoint.
+    # Origins allowed to call /mcp from a browser, comma separated: the
+    # workspace URL, for Genie Code. Empty means none.
+    cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # Optional. When set, every /mcp request must send
+    # "Authorization: Bearer <MCP_TOKEN>". Leave it unset in a Databricks App:
+    # Databricks signs in every caller before a request reaches the app.
     mcp_token: SecretStr | None = None
-    # True only where the platform in front of the app already signs in every
-    # caller, as Databricks Apps does (only users and agents of the workspace
-    # reach the app). /mcp is then served without MCP_TOKEN. Never set this on
-    # a service the internet can reach.
-    mcp_platform_auth: bool = False
 
     # ----------------------------------------------------------- database
-    # Either DATABASE_URL, or the separate DB_* settings below.
+    # The mapping decides the database: config/mapping.databricks.yaml reads a
+    # Databricks SQL warehouse (DATABRICKS_WAREHOUSE_ID), config/mapping.yaml
+    # PostgreSQL, for local runs and tests (DATABASE_URL or the DB_* settings).
     database_url: SecretStr | None = None
     db_host: str = "localhost"
     db_port: int = 5432
@@ -65,19 +54,6 @@ class Settings(BaseSettings):
     # dialect is "databricks" (config/mapping.databricks.yaml).
     databricks_warehouse_id: str | None = None
 
-    # ---------------------------------------------------------------- LLM
-    # Left unset, the provider is "openai" (any OpenAI-compatible endpoint,
-    # such as the approved government gateway) when LLM_API_KEY is set, and
-    # the scripted "demo" otherwise, so the app runs without a key.
-    llm_provider: LLMProvider | None = None
-    llm_api_key: SecretStr | None = None
-    llm_base_url: str | None = None
-    llm_model: str = "claude-opus-5-5"
-    llm_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
-    llm_timeout_seconds: float = Field(120.0, gt=0)
-    llm_max_tokens: int = Field(8192, ge=256)
-    llm_script: Path | None = None
-
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
@@ -91,10 +67,7 @@ class Settings(BaseSettings):
         return DEFAULT_MAPPING if value in ("", None) else value
 
     @field_validator(
-        "llm_provider",
-        "llm_base_url",
         "db_sslmode",
-        "llm_script",
         "databricks_warehouse_id",
         mode="before",
     )
@@ -102,22 +75,10 @@ class Settings(BaseSettings):
     def _blank_is_unset(cls, value: object) -> object:
         return None if value == "" else value
 
-    @field_validator(
-        "llm_api_key", "api_key", "mcp_token", "database_url", "db_password", mode="before"
-    )
+    @field_validator("mcp_token", "database_url", "db_password", mode="before")
     @classmethod
     def _blank_secret_is_unset(cls, value: object) -> object:
         return None if value == "" else value
-
-    @property
-    def mcp_enabled(self) -> bool:
-        return self.mcp_token is not None or self.mcp_platform_auth
-
-    @property
-    def resolved_llm_provider(self) -> LLMProvider:
-        if self.llm_provider is not None:
-            return self.llm_provider
-        return "openai" if self.llm_api_key is not None else "demo"
 
 
 @lru_cache

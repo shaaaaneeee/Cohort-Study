@@ -619,28 +619,6 @@ def attrition_query(
     return sql, params.values, labels
 
 
-def preview_query(
-    study: StudySpec, feature: FeatureSpec, mapping: Mapping, d: Dialect
-) -> tuple[str, dict[str, object]]:
-    """The study's cohort with one extra feature computed on it.
-
-    The feature is never applied as a filter, even if it is an inclusion
-    criterion: the point is to see its values before deciding on it. Its
-    windows do count towards coverage, so the preview shows the cohort as it
-    would be with the feature added. study should not already contain it.
-    """
-    params = Params(d)
-    ctes, _ = _cohort_ctes(study, mapping, d, params, [*study.features, feature])
-    feature_ctes, columns, joins = _feature_select([feature], mapping, d, params)
-    sql = _query(
-        ctes + feature_ctes,
-        ["c.patient_id", "c.exposure", *columns],
-        joins,
-        d.sort_key("c.patient_id"),
-    )
-    return sql, params.values
-
-
 def distinct_values_query(table: str, column: str, d: Dialect) -> str:
     """Every value a dimension takes in the data, as text, sorted by byte value."""
     return (

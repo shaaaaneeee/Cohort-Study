@@ -9,9 +9,9 @@ from app.schemas.study import AGGREGATIONS, FeatureSpec, Periodise, Window
 def catalogue(mapping: Mapping) -> dict[str, Any]:
     """Everything a study can use, from the mapping config.
 
-    Served to the builder as /api/metadata and written into the assistant's
-    prompt. Physical table and column names other than dimensions and
-    measures are left out: neither has any use for them.
+    Served to agents by the describe_data tool. Physical table and column
+    names other than dimensions and measures are left out: agents have no use
+    for them.
     """
     sources = []
     for name, source in mapping.feature_sources().items():

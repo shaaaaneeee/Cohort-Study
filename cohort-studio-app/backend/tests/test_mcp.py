@@ -1,11 +1,11 @@
-"""The /mcp endpoint: the study tools served to AI assistants such as Genie Code."""
+"""The MCP server: the study tools served to AI agents such as Genie One and Genie Code."""
 
 import json
 from typing import Any
 
 from fastapi.testclient import TestClient
 
-from tests.api.test_api import make_client, synthetic_study
+from tests.helpers import make_client, synthetic_study
 
 TOKEN = "test-mcp-token"
 HEADERS = {
@@ -44,9 +44,25 @@ def call(client: TestClient, tool: str, arguments: dict) -> dict:
     return json.loads(content[0]["text"])
 
 
-def test_no_endpoint_without_a_token(synthetic_repo):
+def test_health_reports_the_database(synthetic_repo):
     with make_client(synthetic_repo) as client:
-        assert rpc(client, "tools/list").status_code == 404
+        assert client.get("/health").json()["database"] == "ok"
+
+    def down() -> None:
+        raise RuntimeError("no database")
+
+    with make_client(synthetic_repo, db_check=down) as client:
+        response = client.get("/health")
+        assert response.status_code == 503
+        assert response.json()["database"] == "unavailable"
+
+
+def test_without_a_token_the_platform_guards_it(synthetic_repo):
+    # In a Databricks App the platform signs callers in, so /mcp needs no token.
+    plain = {k: v for k, v in HEADERS.items() if k != "Authorization"}
+    with make_client(synthetic_repo) as client:
+        initialize(client)
+        assert rpc(client, "tools/list", headers=plain).status_code == 200
 
 
 def test_a_request_without_the_token_is_refused(synthetic_repo):
@@ -93,15 +109,6 @@ def test_a_bad_study_comes_back_as_issues(synthetic_repo):
         bad = call(client, "check_study", {"study": {"exposure": "no_such_programme"}})
         assert bad["ok"] is False
         assert bad["issues"]
-
-
-def test_behind_databricks_apps_no_token_is_needed(synthetic_repo):
-    # Databricks Apps signs every caller in before the request reaches the app.
-    plain = {k: v for k, v in HEADERS.items() if k != "Authorization"}
-    with make_client(synthetic_repo, mcp_platform_auth=True) as client:
-        initialize(client)
-        tools = rpc(client, "tools/list", headers=plain).json()["result"]["tools"]
-        assert len(tools) == 5
 
 
 def test_the_url_without_a_trailing_slash_works(synthetic_repo):
@@ -158,7 +165,7 @@ def test_run_study_needs_the_confirmation_of_that_exact_study(synthetic_repo):
 def test_a_browser_agent_on_the_workspace_page_may_call_it(synthetic_repo):
     # Genie Code calls /mcp from the workspace page, so the browser asks first.
     origin = "https://workspace.example.com"
-    with make_client(synthetic_repo, mcp_platform_auth=True, cors_origins=[origin]) as client:
+    with make_client(synthetic_repo, cors_origins=[origin]) as client:
         response = client.options(
             "/mcp/",
             headers={

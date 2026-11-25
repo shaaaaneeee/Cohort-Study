@@ -1,18 +1,16 @@
 [project]
 name = "cohort-studio-backend"
 version = "1.0.0"
-description = "Cohort Studio API: study design, cohort building on PostgreSQL, statistics and the study assistant."
+description = "Cohort Studio MCP server: study tools for AI agents, run on a Databricks SQL warehouse."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 # Exact pins. Each was checked with `pip index versions <pkg>` on 2026-10-27.
 dependencies = [
-    "anthropic==2.3.0",
-    "openai==3.42.1",
     "fastapi==0.162.0",
     "lifelines==0.30.3",
     "numpy==2.5.4",
     "pandas==2.3.3",           # newest 2.x: lifelines 0.30.3 requires pandas<3
-    "psycopg[binary]==3.3.6",
+    "psycopg[binary]==3.3.6",  # PostgreSQL, for local runs and tests
     "pydantic==2.14.1",
     "pydantic-settings==2.16.1",
     "PyYAML==6.0.3",
@@ -21,7 +19,7 @@ dependencies = [
     "statsmodels==0.15.0",
     "uvicorn==0.54.0",
     "mcp==2.3.0",
-    "databricks-sql-connector[pyarrow]==4.9.0",  # Databricks SQL warehouse (DATA_SOURCE=databricks)
+    "databricks-sql-connector[pyarrow]==4.9.0",  # Databricks SQL warehouse
     "databricks-sdk==0.167.0",           # Databricks auth (inside a Databricks App)
 ]
 

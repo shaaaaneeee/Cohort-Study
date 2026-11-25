@@ -105,9 +105,6 @@ class ValuesRepository:
     def attrition_counts(self, spec: object) -> list[dict]:
         raise AssertionError("this test should not build a cohort")
 
-    def feature_preview(self, feature: object, spec: object) -> dict:
-        raise AssertionError("this test should not build a cohort")
-
     def analysis_table(self, spec: object) -> pd.DataFrame:
         raise AssertionError("this test should not build a cohort")
 

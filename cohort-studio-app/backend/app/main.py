@@ -1,26 +1,25 @@
-"""The FastAPI app.
+"""The MCP server app.
 
-    python -m app                                   # serves on HOST:PORT from the environment
+    python -m app                                   # serves on HOST:PORT (DATABRICKS_APP_PORT)
     uvicorn app.main:create_app --factory           # the same, through uvicorn directly
 
-create_app() builds the app around a repository. In production it makes one
-on PostgreSQL from the settings; tests pass their own.
+Serves the study tools to AI agents (Genie One, Genie Code, the AI Playground)
+over MCP at /mcp, plus /health. create_app() builds the study service on the
+database the mapping names: a Databricks SQL warehouse in production, or
+PostgreSQL for local runs and tests. Tests pass their own repository.
 """
 
 import logging
 from collections.abc import AsyncIterator, Callable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager, nullcontext
+from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import Engine
 
 from app import __version__
-from app.ai.llm.base import LLMClient
-from app.api.deps import require_api_key
-from app.api.routes import chat, health, metadata, study
 from app.core.config import Settings, get_settings
-from app.core.errors import register_error_handlers
 from app.core.logs import configure_logging, request_logging
 from app.core.mapping import load_mapping
 from app.db.databricks import databricks_ping, databricks_runner
@@ -36,10 +35,8 @@ log = logging.getLogger(__name__)
 def create_app(
     settings: Settings | None = None,
     repository: CohortRepository | None = None,
-    llm_client: LLMClient | None = None,
     db_check: Callable[[], None] | None = None,
 ) -> FastAPI:
-    """The app. llm_client is made from the settings on the first chat if not given."""
     settings = settings or get_settings()
     configure_logging(settings.log_level, settings.log_format)
 
@@ -61,63 +58,52 @@ def create_app(
 
         repository = SqlCohortRepository(mapping, dialect, run)
 
-    study_service = StudyService(repository)
-
-    # The study tools for AI assistants (e.g. Databricks Genie Code), only when
-    # MCP_TOKEN or MCP_PLATFORM_AUTH is set. Built here so the lifespan can run
-    # its session manager.
-    mcp_app = None
-    if settings.mcp_enabled:
-        mcp = build_mcp(study_service)
-        token = settings.mcp_token.get_secret_value() if settings.mcp_token else None
-        mcp_app = mcp_asgi_app(mcp, token)
-
-    def mcp_running() -> AbstractAsyncContextManager[object]:
-        return mcp.session_manager.run() if mcp_app is not None else nullcontext()
+    mcp = build_mcp(StudyService(repository))
+    token = settings.mcp_token.get_secret_value() if settings.mcp_token else None
+    check_database = db_check or (lambda: None)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        log.info(
-            "starting",
-            extra={
-                "version": __version__,
-                "env": settings.app_env,
-                "llm_provider": settings.resolved_llm_provider,
-            },
-        )
-        async with mcp_running():
+        log.info("starting", extra={"version": __version__, "env": settings.app_env})
+        async with mcp.session_manager.run():
             yield
         if engine is not None:
             engine.dispose()
 
     app = FastAPI(
-        title="Cohort Studio API",
+        title="Cohort Studio MCP server",
         version=__version__,
         lifespan=lifespan,
-        # The interactive docs are useful locally and in staging, and
-        # reveal nothing the frontend does not already show.
-        docs_url="/docs",
+        docs_url=None,
         redoc_url=None,
     )
-    app.state.settings = settings
-    app.state.study_service = study_service
-    app.state.llm_client = llm_client
-    app.state.db_check = db_check or (lambda: None)
 
-    register_error_handlers(app)
+    @app.get("/health")
+    def health() -> JSONResponse:
+        """200 when the server is up and the database answers, 503 otherwise."""
+        try:
+            check_database()
+            database = "ok"
+        except Exception:
+            log.warning("health check: database unavailable", exc_info=True)
+            database = "unavailable"
+        return JSONResponse(
+            status_code=200 if database == "ok" else 503,
+            content={"status": database, "database": database, "version": __version__},
+        )
+
     app.middleware("http")(request_logging)
     if settings.cors_origins:
+        # Genie Code calls /mcp from the workspace page in the browser, with
+        # the workspace's sign-in, so the workspace must be an allowed origin.
         app.add_middleware(
             CORSMiddleware,
             allow_origins=settings.cors_origins,
             allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-            # The MCP headers let a browser-based agent (Genie Code) call /mcp;
-            # its requests carry the workspace's sign-in, hence credentials.
             allow_headers=[
                 "Content-Type",
                 "Accept",
                 "Authorization",
-                "X-API-Key",
                 "X-Request-ID",
                 "Mcp-Session-Id",
                 "Mcp-Protocol-Version",
@@ -127,14 +113,6 @@ def create_app(
             expose_headers=["X-Request-ID", "Mcp-Session-Id"],
             max_age=600,
         )
-
-    api = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)])
-    api.include_router(metadata.router)
-    api.include_router(study.router)
-    api.include_router(chat.router)
-    app.include_router(api)
-    app.include_router(health.router)
-    if mcp_app is not None:
-        app.mount("/mcp", mcp_app)
-        app.add_middleware(TrailingSlash)
+    app.mount("/mcp", mcp_asgi_app(mcp, token))
+    app.add_middleware(TrailingSlash)
     return app

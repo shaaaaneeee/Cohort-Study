@@ -1,84 +1,58 @@
-# Cohort Studio
+# Cohort Studio MCP server
 
-A study-design assistant for health data. A researcher describes a cohort
-study in plain words or builds it step by step (treatment group, inclusion
-criteria, covariates, outcome); the app builds the cohort from PostgreSQL,
-matches treated patients to controls, and fits the model the outcome calls
-for.
+Study tools for AI agents. An agent such as Genie One, Genie Code or the
+Databricks AI Playground connects over MCP and can design and run an
+observational cohort study: does an exposure (a programme) change an outcome
+(ED attendances)? The agent handles the conversation; every number comes from
+this server's tested code (propensity score matching, then the outcome model
+the outcome type calls for). The agent never writes SQL and never sees
+patient-level rows.
+
+## The tools
+
+| Tool | What it does |
+|---|---|
+| `describe_data` | What the data holds: exposures, sources, filters, and the study JSON schema |
+| `list_values` | The allowed values of one filter, e.g. triage levels |
+| `review_study` | What a draft still leaves open (outcome, follow-up, covariates, population), as questions with options for the agent to ask the user |
+| `check_study` | Validates a study: design issues, patient counts per eligibility step, a plain-English summary and a confirmation code |
+| `run_study` | Runs the analysis, only with the confirmation code of the study the user confirmed |
+
+The server instructions tell the agent the order: describe, review, ask the
+user, check and confirm, then run.
+
+## How a call flows
+
+```
+agent ── MCP ──> app/mcp_server.py            the five tools
+                 app/services/study.py        StudyService: check, attrition, analysis
+                 app/services/clarify.py      open questions, summary, confirmation code
+                 app/analysis/validation.py   design rules and cohort size
+                 app/db/queries.py            SQL generation (names from the mapping, values bound)
+                 app/db/dialect.py            Databricks SQL (or PostgreSQL locally)
+                 app/db/databricks.py         SQL warehouse runner
+                 app/analysis/                matching and outcome models
+```
+
+## Layout
 
 | Path | What it is |
 |---|---|
-| `frontend/` | React + Vite + TypeScript + MUI web app (own Dockerfile) |
-| `backend/` | FastAPI service: API, database access, statistics, study assistant (own Dockerfile) |
-| `docs/` | [architecture](docs/architecture.md), [deployment](docs/deployment.md), [database setup](docs/db-setup.md), [Databricks App and MCP](docs/databricks-app.md) |
-| `docker-compose.yml` | Local development: frontend, backend, and a seeded mock PostgreSQL |
+| `backend/app/` | The server (Python, FastAPI + MCP) |
+| `backend/app.yaml` | The Databricks App's start command and settings |
+| `backend/config/mapping.databricks.yaml` | The tables in Unity Catalog (`workspace.cohort.*`) |
+| `backend/config/mapping.yaml` | The same tables in PostgreSQL, for local runs and tests |
+| `backend/app/seed/` | The synthetic test data, and loading it into PostgreSQL |
+| `backend/tests/` | Tests (PostgreSQL) |
+| `docs/databricks-app.md` | Deploying on Databricks and connecting agents |
 
-The original proof of concept is in `../legacy/`, unchanged, for comparison.
-
-## Run everything locally
-
-Needs Docker.
-
-```sh
-cp .env.example .env        # optional
-docker compose up --build
-```
-
-- Web app: http://localhost:8080
-- API docs: http://localhost:8000/docs
-- PostgreSQL: `localhost:5433` (owner `cohort_owner`)
-
-Compose starts PostgreSQL, creates the schema and the app's read-only role,
-loads 20,000 synthetic patients, then starts the backend and the frontend.
-Without `LLM_API_KEY` the assistant plays three scripted scenarios: ask about
-ED attendances, about mortality, or whether the programme "helps".
-
-## Develop without Docker
-
-Backend (Python 3.13, [uv](https://docs.astral.sh/uv/)):
+## Develop locally
 
 ```sh
 cd backend
 uv sync
-cp .env.example .env        # point DB_* at a database; see docs/db-setup.md
-uv run python -m app        # http://localhost:8000
+TEST_DATABASE_URL=postgresql://user:pass@localhost/cohort_test uv run pytest
 ```
 
-Frontend (Node 24 or later):
-
-```sh
-cd frontend
-npm ci
-npm run dev                 # http://localhost:5173; public/config.js points at :8000
-```
-
-## Checks
-
-```sh
-cd backend
-uv run ruff check . && uv run ruff format --check . && uv run mypy
-TEST_DATABASE_URL=postgresql://cohort_owner:local-owner-password@localhost:5433/cohort_test uv run pytest
-
-cd frontend
-npm run lint && npm run format:check && npm run typecheck && npm test && npm run build
-```
-
-Backend tests that need PostgreSQL are skipped when `TEST_DATABASE_URL` is
-not set; `docker compose up -d postgres` provides one.
-
-After changing a backend request or response model, regenerate the
-frontend's types:
-
-```sh
-cd backend && uv run python scripts/export_openapi.py ../frontend/openapi.json
-cd ../frontend && npm run gen:types
-```
-
-## How the services connect
-
-The browser loads the app from the frontend service and calls the backend
-directly, at the URL in `/config.js` (written from `API_BASE_URL` when the
-frontend container starts, so one image serves every environment). The
-backend allows that origin through `CORS_ORIGINS`, reads PostgreSQL as a
-read-only role, and calls the LLM provider for the assistant. Every
-environment variable is listed in [docs/deployment.md](docs/deployment.md).
+All data is synthetic. The earlier web app and study assistant are kept on the
+`archive/web-app-and-assistant` branch.

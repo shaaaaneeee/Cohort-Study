@@ -6,18 +6,17 @@ SqlCohortRepository implements it for any engine that has a dialect; the
 query runner is passed in, so tests can watch every query that is sent.
 """
 
-import math
 from typing import Protocol
 
 import pandas as pd
 
-from app.analysis.validation import check_feature_variation, check_small_cells, validate_study
+from app.analysis.validation import validate_study
 from app.core.exceptions import StudyError
 from app.core.mapping import PERSON_SOURCE, Mapping
 from app.db import queries
 from app.db.dialect import Dialect
 from app.db.session import QueryRunner
-from app.schemas.study import FeatureSpec, StudySpec, feature_columns
+from app.schemas.study import StudySpec
 
 # One dict per eligibility step, in order: {"step": label, "treated": n,
 # "control": n}, each n being the patients left after that step and every
@@ -29,7 +28,6 @@ AttritionCounts = list[dict]
 #               "treated": {"n", "nonzero", "mean", "min", "max"},
 #               "control": {...}}, ...],
 #  "issues": [warnings about the values, from validation.py]}
-FeatureSummary = dict
 
 
 class CohortRepository(Protocol):
@@ -37,7 +35,6 @@ class CohortRepository(Protocol):
 
     def dimension_values(self, source: str, dimension: str) -> list[str]: ...
     def attrition_counts(self, spec: StudySpec) -> AttritionCounts: ...
-    def feature_preview(self, feature: FeatureSpec, spec: StudySpec) -> FeatureSummary: ...
     def analysis_table(self, spec: StudySpec) -> pd.DataFrame: ...
 
 
@@ -89,23 +86,6 @@ class SqlCohortRepository:
             for k, label in enumerate(labels)
         ]
 
-    def feature_preview(self, feature: FeatureSpec, spec: StudySpec) -> FeatureSummary:
-        """Summarise one feature's values in the study's cohort, by group.
-
-        A feature already in the study under the same name is replaced, so
-        the user can preview an edit before saving it.
-        """
-        others = [f for f in spec.features if f.name != feature.name]
-        # Checked as part of the study, so a preview is refused for the same
-        # reasons the analysis would be. A second outcome is allowed: the
-        # user may be comparing candidate outcomes before choosing one.
-        self._check(
-            spec.model_copy(update={"features": [*others, feature]}), ignore={"outcome_count"}
-        )
-        study = spec.model_copy(update={"features": others})
-        query, params = queries.preview_query(study, feature, self.mapping, self.dialect)
-        return _summarise(feature, self.run(query, params))
-
     def analysis_table(self, spec: StudySpec) -> pd.DataFrame:
         """One row per patient in the final cohort; queries.analysis_query lists the columns."""
         self._check(spec)
@@ -123,39 +103,3 @@ class SqlCohortRepository:
         for i in issues:
             if i["level"] == "error" and i["code"] not in ignore:
                 raise StudyError(issues)
-
-
-def _summarise(feature: FeatureSpec, table: pd.DataFrame) -> FeatureSummary:
-    issues: list[dict] = []
-    sizes = {}
-    for arm, group in ((1, "treated"), (0, "control")):
-        sizes[group] = int((table["exposure"] == arm).sum())
-        issues += check_small_cells({f"{group} patients": sizes[group]})
-
-    columns = []
-    for column in feature_columns(feature):
-        entry: dict[str, object] = {"column": column}
-        for arm, group in ((1, "treated"), (0, "control")):
-            values = table.loc[table["exposure"] == arm, column]
-            nonzero = int((values != 0).sum())
-            entry[group] = {
-                "n": sizes[group],
-                "nonzero": nonzero,
-                "mean": _number(values.mean()),
-                "min": _number(values.min()),
-                "max": _number(values.max()),
-            }
-            issues += check_small_cells({f"{group} patients with non-zero {column}": nonzero})
-        columns.append(entry)
-        issues += check_feature_variation(column, table[column])
-    return {"feature": feature.name, "columns": columns, "issues": issues}
-
-
-def _number(x: object) -> float | None:
-    # An empty group gives NaN, which JSON cannot carry.
-    if x is None:
-        return None
-    value = float(x)  # type: ignore[arg-type]
-    if math.isnan(value):
-        return None
-    return value
