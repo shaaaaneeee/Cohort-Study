@@ -1,4 +1,4 @@
-"""Run the API: python -m app. HOST and PORT come from the environment."""
+"""Run the MCP server: python -m app. HOST and PORT come from the environment."""
 
 import uvicorn
 

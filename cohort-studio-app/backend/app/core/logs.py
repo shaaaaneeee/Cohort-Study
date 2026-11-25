@@ -1,7 +1,7 @@
 """Structured logging: one JSON object per line, with a request id on every request.
 
-Northflank (like most log collectors) indexes JSON lines field by field, so
-LOG_FORMAT=json is the default. LOG_FORMAT=text is easier to read locally.
+Log collectors index JSON lines field by field, so LOG_FORMAT=json is the
+default. LOG_FORMAT=text is easier to read locally.
 """
 
 import contextvars

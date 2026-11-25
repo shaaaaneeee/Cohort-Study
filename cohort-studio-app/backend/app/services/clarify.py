@@ -1,8 +1,8 @@
 """What a study draft still leaves open, so an agent can ask instead of assuming.
 
-The web app's assistant asks the user before it fills in a study. An outside
-agent calling the MCP tools (Genie Code, the AI Playground) does not: in
-tests it stated its own assumptions and ran. review() turns a partial draft
+Left alone, an agent calling the MCP tools (Genie One, Genie Code, the AI
+Playground) does not ask the user: in tests it stated its own assumptions and
+ran. review() turns a partial draft
 into the questions the user should answer, each with ready-made options. An
 option carries the change it makes to the draft, so the agent can apply the
 answer without guessing at the schema.
@@ -149,14 +149,14 @@ def review(draft: dict[str, Any], meta: dict, condition_values: list[str]) -> di
         and "inclusion" not in roles
     )
     if population_open:
-        options: list[dict[str, Any]] = [
+        population_options: list[dict[str, Any]] = [
             {"label": "Everyone in the data (default)", "set": {}},
             {"label": "Aged 65 and over", "set": {"age_min": 65}},
         ]
         condition = next((s for s in meta["sources"] if s["name"] == "condition"), None)
         if condition:
             for value in condition_values[:4]:
-                options.append(
+                population_options.append(
                     {
                         "label": f"Only patients with {value} before enrolment",
                         "add_feature": {
@@ -175,7 +175,7 @@ def review(draft: dict[str, Any], meta: dict, condition_values: list[str]) -> di
             {
                 "id": "population",
                 "question": "Should the study be limited to a group of patients?",
-                "options": options,
+                "options": population_options,
                 "default": "Everyone in the data (default)",
             }
         )

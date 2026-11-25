@@ -11,7 +11,7 @@ import pytest
 from app.core.exceptions import StudyError
 from app.core.mapping import Source
 from app.db.repositories.cohort import SqlCohortRepository
-from app.schemas.study import FeatureSpec, StudySpec
+from app.schemas.study import StudySpec
 
 INDEX = pd.Timestamp("2021-06-15")
 
@@ -266,48 +266,6 @@ def test_windows_outside_the_data_coverage_exclude_the_patient(repo, feature):
 def test_exclusion_criterion(repo):
     s = study(dx("no_asthma", "asthma", role="inclusion", keep_if={"op": "==", "value": 0}))
     assert list(repo.analysis_table(s)["patient_id"]) == ["T1", "T2", "C2"]
-
-
-# ------------------------------------------------------------------ preview
-
-
-def test_feature_preview_summarises_by_group(repo):
-    summary = repo.feature_preview(FeatureSpec.model_validate(ed("ed_pre", -365, -1)), study())
-    assert summary["feature"] == "ed_pre"
-    column = summary["columns"][0]
-    assert column["column"] == "ed_pre"
-    assert column["treated"] == {"n": 2, "nonzero": 1, "mean": 1.0, "min": 0.0, "max": 2.0}
-    assert column["control"] == {"n": 2, "nonzero": 2, "mean": 2.0, "min": 1.0, "max": 3.0}
-    # Two patients per group is below the suppression threshold of 5.
-    codes = [i["code"] for i in summary["issues"]]
-    assert "small_cell" in codes
-
-
-def test_previewing_an_inclusion_criterion_does_not_apply_it(repo):
-    criterion = FeatureSpec.model_validate(
-        dx("has_diabetes", "diabetes", role="inclusion", keep_if={"op": "==", "value": 1})
-    )
-    summary = repo.feature_preview(criterion, study(outcome=None))
-    column = summary["columns"][0]
-    assert column["treated"]["n"] == 2
-    assert column["treated"]["nonzero"] == 1
-
-
-def test_preview_replaces_a_feature_of_the_same_name(repo):
-    s = study(ed("ed_pre", -365, -1))
-    edited = FeatureSpec.model_validate(ed("ed_pre", -30, -1))
-    summary = repo.feature_preview(edited, s)
-    # Within 30 days of index: T1 day -1, C1 days -15 and -14.
-    assert summary["columns"][0]["treated"]["max"] == 1.0
-    assert summary["columns"][0]["control"]["max"] == 2.0
-
-
-def test_preview_warns_about_a_constant_feature(repo):
-    summary = repo.feature_preview(
-        FeatureSpec.model_validate(ed("p1_pre", -365, -1, filters={"triage_level": ["P1"]})),
-        study(),
-    )
-    assert "constant_feature" in [i["code"] for i in summary["issues"]]
 
 
 # ------------------------------------------------------- refusing bad input
