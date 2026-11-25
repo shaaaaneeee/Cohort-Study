@@ -14,8 +14,8 @@ from app.analysis.validation import validate_study
 from app.core.exceptions import StudyError
 from app.core.mapping import PERSON_SOURCE, Mapping
 from app.db import queries
+from app.db.databricks import QueryRunner
 from app.db.dialect import Dialect
-from app.db.session import QueryRunner
 from app.schemas.study import StudySpec
 
 # One dict per eligibility step, in order: {"step": label, "treated": n,

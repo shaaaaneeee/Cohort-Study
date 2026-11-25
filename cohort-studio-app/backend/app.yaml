@@ -6,9 +6,6 @@
 command: ["uv", "run", "--frozen", "--no-dev", "python", "-m", "app"]
 
 env:
-  # Read the copy of the tables in Unity Catalog (workspace.cohort.*).
-  - name: MAPPING_PATH
-    value: config/mapping.databricks.yaml
   # The SQL warehouse added to the app as a resource with the key "sql-warehouse".
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse

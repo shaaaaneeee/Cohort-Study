@@ -150,7 +150,7 @@ class Backend(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    dialect: Literal["postgres", "databricks"] = "postgres"
+    dialect: Literal["databricks"] = "databricks"
 
 
 class Mapping(BaseModel):

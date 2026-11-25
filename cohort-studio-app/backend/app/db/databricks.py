@@ -1,10 +1,9 @@
-"""Running queries on a Databricks SQL warehouse instead of PostgreSQL.
+"""Running queries on a Databricks SQL warehouse.
 
-Used when the mapping says `backend: dialect: databricks`, for example when
-the app runs as a Databricks App next to a copy of the tables in Unity
-Catalog. The query text is the same the generator writes for PostgreSQL,
-with DatabricksDialect's date functions; parameters are bound by the
-connector, never formatted into the text.
+The app runs as a Databricks App and reads the tables in Unity Catalog. The
+query text comes from the generator (queries.py) with DatabricksDialect's
+date functions; parameters are bound by the connector, never formatted into
+the text.
 
 Credentials: inside a Databricks App the platform gives the app its own
 service principal (DATABRICKS_HOST, DATABRICKS_CLIENT_ID and
@@ -15,19 +14,39 @@ Unity Catalog grants: give the app's service principal SELECT on the tables
 and nothing more.
 """
 
+import datetime as dt
 import logging
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import pandas as pd
 
 from app.core.config import Settings
 from app.core.exceptions import DataSourceError
-from app.db.session import QueryRunner, to_frame
 
 log = logging.getLogger(__name__)
+
+# Runs one query with its bound parameters and returns the result.
+QueryRunner = Callable[[str, Mapping[str, object]], pd.DataFrame]
+
+
+def to_frame(rows: Sequence[Any], columns: list[str]) -> pd.DataFrame:
+    """Rows as a DataFrame with the dtypes the statistics expect.
+
+    DECIMAL values become floats; DATE columns become datetime64, as the
+    analysis compares them with pandas Timestamps.
+    """
+    frame = pd.DataFrame.from_records(rows, columns=columns, coerce_float=True)
+    for column in frame.columns:
+        if frame[column].dtype == object:
+            present = frame[column].dropna()
+            if len(present) and all(
+                isinstance(v, dt.date) and not isinstance(v, dt.datetime) for v in present
+            ):
+                frame[column] = pd.to_datetime(frame[column])
+    return frame
 
 
 def _connect_factory(settings: Settings) -> Callable[[], Any]:
@@ -76,7 +95,7 @@ def _connect_factory(settings: Settings) -> Callable[[], Any]:
 
 
 def databricks_runner(settings: Settings, connect: Callable[[], Any] | None = None) -> QueryRunner:
-    """Like session.query_runner, for a Databricks SQL warehouse."""
+    """A function that runs a query on the SQL warehouse and returns a DataFrame."""
     open_connection = connect or _connect_factory(settings)
 
     def run(query: str, params: Mapping[str, object]) -> pd.DataFrame:

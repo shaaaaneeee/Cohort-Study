@@ -5,8 +5,8 @@
 
 Serves the study tools to AI agents (Genie One, Genie Code, the AI Playground)
 over MCP at /mcp, plus /health. create_app() builds the study service on the
-database the mapping names: a Databricks SQL warehouse in production, or
-PostgreSQL for local runs and tests. Tests pass their own repository.
+Databricks SQL warehouse and the tables the mapping names. A caller can pass
+its own repository instead, e.g. to try the tools on in-memory data.
 """
 
 import logging
@@ -16,7 +16,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import Engine
 
 from app import __version__
 from app.core.config import Settings, get_settings
@@ -25,7 +24,6 @@ from app.core.mapping import load_mapping
 from app.db.databricks import databricks_ping, databricks_runner
 from app.db.dialect import dialect_for
 from app.db.repositories.cohort import CohortRepository, SqlCohortRepository
-from app.db.session import create_db_engine, ping, query_runner
 from app.mcp_server import TrailingSlash, build_mcp, mcp_asgi_app
 from app.services.study import StudyService
 
@@ -40,23 +38,11 @@ def create_app(
     settings = settings or get_settings()
     configure_logging(settings.log_level, settings.log_format)
 
-    engine: Engine | None = None
     if repository is None:
         mapping = load_mapping(settings.mapping_path)
-        dialect = dialect_for(mapping.backend.dialect)
-        if dialect.name == "databricks":
-            run = databricks_runner(settings)
-            db_check = db_check or databricks_ping(run)
-        else:
-            engine = create_db_engine(settings)
-            run = query_runner(engine)
-            if db_check is None:
-                postgres = engine
-
-                def db_check() -> None:
-                    ping(postgres)
-
-        repository = SqlCohortRepository(mapping, dialect, run)
+        run = databricks_runner(settings)
+        db_check = db_check or databricks_ping(run)
+        repository = SqlCohortRepository(mapping, dialect_for(mapping.backend.dialect), run)
 
     mcp = build_mcp(StudyService(repository))
     token = settings.mcp_token.get_secret_value() if settings.mcp_token else None
@@ -67,8 +53,6 @@ def create_app(
         log.info("starting", extra={"version": __version__, "env": settings.app_env})
         async with mcp.session_manager.run():
             yield
-        if engine is not None:
-            engine.dispose()
 
     app = FastAPI(
         title="Cohort Studio MCP server",
