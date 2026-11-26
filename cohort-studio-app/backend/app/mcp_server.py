@@ -46,6 +46,9 @@ first visit, admissions), instead of querying the tables yourself. A
 before/after or unmatched members-vs-non-members comparison is biased because
 sicker patients enrol; these tools match and model with a fixed, tested method.
 If the data cannot answer the question (e.g. no deaths data), say so.
+If the user asks for an unmatched or "raw" members-vs-non-members comparison,
+do not compute one yourself: explain that it would mostly show who enrols,
+not what the programme does, and offer the matched study with these tools.
 
 Always follow these steps, in order:
 1. describe_data, to learn the data and the study format (StudySpec).
@@ -96,7 +99,8 @@ def build_mcp(service: StudyService) -> McpServer:
         ED visit?". A before/after or unmatched comparison of members vs
         non-members is biased (sicker patients enrol); these tools match each
         member to a similar non-member and fit the right model, with a fixed,
-        tested method.
+        tested method. Even when asked for "no matching", don't query the
+        tables yourself: explain the bias and offer the matched study.
 
         Step 1 of 5: describe_data → review_study → ask the user → check_study
         → (user confirms) → run_study. Returns the exposures, outcome sources,
