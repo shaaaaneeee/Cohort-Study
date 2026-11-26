@@ -39,18 +39,31 @@ agent ── MCP ──> app/mcp_protocol.py          MCP over HTTP (JSON-RPC), 
 
 | Path | What it is |
 |---|---|
-| `backend/app/` | The server (Python, FastAPI + MCP) |
+| `backend/app/` | The server (Python 3.11+, FastAPI) |
 | `backend/app.yaml` | The Databricks App's start command and settings |
-| `backend/config/mapping.yaml` | The tables in Unity Catalog (`workspace.cohort.*`); change the prefix for another catalog or schema |
-| `backend/app/seed/synthetic.py` | The synthetic test data, with a planted effect (rate ratio 0.70) and selection bias |
-| `notebooks/load_synthetic_data.py` | Databricks notebook: writes the synthetic tables into a catalog and schema |
-| `docs/databricks-app.md` | Loading the data, deploying, and connecting agents |
+| `backend/requirements.txt` | The packages, installed by Databricks with pip |
+| `backend/config/mapping.yaml` | The tables in Unity Catalog (`workspace.cohort.*` by default) |
+| `backend/app/seed/synthetic.py` | The synthetic data: a planted effect (rate ratio 0.70) and a planted selection bias |
+| `notebooks/load_synthetic_data.py` | Databricks notebook that writes the synthetic tables into a catalog and schema |
+| `docs/databricks-app.md` | Loading the data, deploying, connecting agents, moving to Healix |
+
+Lines that change in another workspace (e.g. Healix) are marked `HEALIX`.
 
 ## Try it in a new workspace
 
 1. Pull this repo as a Git folder.
 2. Run `notebooks/load_synthetic_data.py` (set the catalog and schema widgets).
 3. Deploy `backend/` as a Databricks App: [docs/databricks-app.md](docs/databricks-app.md).
+
+## Checks before merging
+
+```sh
+cd backend
+pip install -r requirements.txt ruff mypy pandas-stubs types-PyYAML scipy-stubs
+ruff check . && ruff format --check . && mypy
+```
+
+Settings are in `ruff.toml` and `mypy.ini`.
 
 All data is synthetic. Earlier versions are kept on branches:
 `archive/web-app-and-assistant` (the web app and its study assistant) and
