@@ -164,7 +164,9 @@ def review(draft: dict[str, Any], meta: dict, condition_values: list[str]) -> di
                             "label": f"{value} before enrolment",
                             "source": "condition",
                             "filters": {"condition_name": [value]},
-                            "window": {"from": -5, "to": -1, "unit": "years"},
+                            # Any diagnosis in an earlier year: chronic conditions
+                            # persist, so a short look-back would drop most patients.
+                            "window": {"from": -100, "to": -1, "unit": "years"},
                             "aggregation": "binary",
                             "role": "inclusion",
                             "keep_if": {"op": "==", "value": 1},
