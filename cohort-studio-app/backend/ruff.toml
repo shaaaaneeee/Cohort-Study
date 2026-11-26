@@ -1,0 +1,18 @@
+# Lint settings (dev only; not used by the Databricks App).
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "N", "S", "C4", "PT", "LOG", "G"]
+ignore = [
+    "S101",    # asserts state invariants for the type checker
+    "S608",    # the SQL builder writes only names checked against the mapping; values are bound
+    "RUF001",  # the explanatory text uses typographic characters on purpose
+    "RUF002",
+    "RUF003",
+    "N806",    # X for a design matrix is the statistical convention
+    "N803",
+]
+
+[lint.isort]
+known-first-party = ["app"]

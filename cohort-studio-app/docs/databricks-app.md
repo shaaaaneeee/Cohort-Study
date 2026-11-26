@@ -10,9 +10,8 @@ What makes this work:
 - `config/mapping.yaml`: the four tables, by full name (`catalog.schema.table`).
 - `app/db/dialect.py` (`DatabricksDialect`) and `app/db/databricks.py`: the
   date functions and the query runner for a SQL warehouse.
-- No `requirements.txt` in `backend/`: with one, Databricks would install with
-  Python 3.11, which the pinned packages do not support. Without it, Databricks
-  installs from `pyproject.toml` + `uv.lock` with Python 3.13.
+- `requirements.txt`: the packages, installed by Databricks with pip
+  (Python 3.11). Every pin supports Python 3.11.
 - No token of our own: Databricks signs in every caller before a request
   reaches the app.
 
@@ -99,7 +98,7 @@ a summary to confirm, and only then call `run_study`.
 
 | Symptom | Cause |
 | --- | --- |
-| Deploy fails installing packages | A `requirements.txt` crept into `backend/`; remove it. |
+| Deploy fails installing packages | The workspace can't reach PyPI: add the internal mirror as `--index-url` in `requirements.txt`, and check the mirror allows every package (e.g. `mcp`). |
 | HTTP 503 "App Not Available" | The app is stopped (Free Edition stops idle apps): Start it. |
 | HTTP 401 from Unity Gateway | The caller service principal lacks **Can Use** on the app. |
 | "Failed to generate OAuth token" in an agent | The platform's sign-in between agent and app; retry, or reconnect the connector. |
