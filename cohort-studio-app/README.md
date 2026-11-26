@@ -24,7 +24,8 @@ user, check and confirm, then run.
 ## How a call flows
 
 ```
-agent ── MCP ──> app/mcp_server.py            the five tools
+agent ── MCP ──> app/mcp_protocol.py          MCP over HTTP (JSON-RPC), no extra package
+                 app/mcp_server.py            the five tools
                  app/services/study.py        StudyService: check, attrition, analysis
                  app/services/clarify.py      open questions, summary, confirmation code
                  app/analysis/validation.py   design rules and cohort size

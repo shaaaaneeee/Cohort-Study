@@ -51,8 +51,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info("starting", extra={"version": __version__, "env": settings.app_env})
-        async with mcp.session_manager.run():
-            yield
+        yield
 
     app = FastAPI(
         title="Cohort Studio MCP server",
