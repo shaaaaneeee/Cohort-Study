@@ -39,10 +39,13 @@ log = logging.getLogger(__name__)
 
 INSTRUCTIONS = """\
 Tools for observational cohort studies on the Cohort Studio data: does an
-exposure (e.g. a programme) change an outcome (e.g. ED attendances)?
-Use these tools for any such question instead of writing your own analysis:
-they use a fixed, tested method (propensity score matching, then the outcome
-model the outcome type calls for).
+exposure (e.g. a programme) change an outcome (e.g. ED attendances,
+admissions)? Use these tools for ANY such question, including subgroups
+("for diabetics", "for the elderly") and outcome variants (any visit, time to
+first visit, admissions), instead of querying the tables yourself. A
+before/after or unmatched members-vs-non-members comparison is biased because
+sicker patients enrol; these tools match and model with a fixed, tested method.
+If the data cannot answer the question (e.g. no deaths data), say so.
 
 Always follow these steps, in order:
 1. describe_data, to learn the data and the study format (StudySpec).
@@ -85,10 +88,19 @@ def build_mcp(service: StudyService) -> McpServer:
 
     @mcp.tool()
     def describe_data() -> Any:
-        """What the data holds: exposures, sources, filters and allowed aggregations.
+        """START HERE for any question on whether a programme affects patient outcomes.
 
-        Call this first. The study schema accepted by check_study and run_study
-        is in 'study_schema'.
+        Use the Cohort Studio tools, not your own SQL, for questions like "does
+        Programme A help patients?", "does it reduce ED visits / admissions?",
+        "is it worth it for the elderly / diabetics?", "does it delay the first
+        ED visit?". A before/after or unmatched comparison of members vs
+        non-members is biased (sicker patients enrol); these tools match each
+        member to a similar non-member and fit the right model, with a fixed,
+        tested method.
+
+        Step 1 of 5: describe_data → review_study → ask the user → check_study
+        → (user confirms) → run_study. Returns the exposures, outcome sources,
+        filters and the study schema ('study_schema').
         """
         try:
             return clean({**service.metadata(), "study_schema": StudySpec.model_json_schema()})
@@ -97,8 +109,9 @@ def build_mcp(service: StudyService) -> McpServer:
 
     @mcp.tool({"source": {"type": "string"}, "dimension": {"type": "string"}})
     def list_values(source: str, dimension: str) -> dict[str, Any]:
-        """Every allowed value of one filter.
+        """Every allowed value of one filter, e.g. triage levels or condition names.
 
+        Use before filtering on a value, to spell it as the data does.
         Example: source 'ed_episodes', dimension 'triage_level'.
         """
         try:
@@ -110,12 +123,14 @@ def build_mcp(service: StudyService) -> McpServer:
 
     @mcp.tool({"study": STUDY})
     def review_study(study: dict[str, Any]) -> Any:
-        """List what a draft study still leaves open, as questions to ask the user.
+        """List the study choices still open, as questions to ask the user before analysing.
 
-        Call this before check_study. The draft may be partial, even {}. Each
-        question has options; an option either sets fields ("set"), adds a
-        feature ("add_feature") or sets the outcome window ("outcome_window").
-        Ask the user every question and apply their answers; do not choose.
+        Step 2 of the Cohort Studio workflow, after describe_data. Pass the
+        draft study, even partial or {}. Returns questions (outcome, follow-up,
+        what to match on, population), each with options and a default. Ask the
+        user every question and wait for the answers; never choose for them.
+        Apply an answer as its option says: "set" fields, "add_feature", or
+        "outcome_window".
         """
         try:
             meta = service.metadata()
@@ -129,12 +144,12 @@ def build_mcp(service: StudyService) -> McpServer:
 
     @mcp.tool({"study": STUDY})
     def check_study(study: dict[str, Any]) -> Any:
-        """Validate a study definition and count the patients left after each eligibility step.
+        """Check a study and get the summary the user must confirm before it runs.
 
-        Returns design issues (errors must be fixed before running), the outcome
-        model the study implies, the treated/control counts per step, a plain-
-        English summary to show the user, and the confirmation_code run_study
-        needs once the user has confirmed.
+        Step 4 of the Cohort Studio workflow. Returns design errors to fix,
+        patient counts after each eligibility step, the outcome model the study
+        implies, a plain-English summary to show the user, and the
+        confirmation_code run_study needs once the user says yes.
         """
         spec = _study(study)
         if isinstance(spec, dict):
@@ -159,12 +174,13 @@ def build_mcp(service: StudyService) -> McpServer:
 
     @mcp.tool({"study": STUDY, "confirmation_code": {"type": "string"}})
     def run_study(study: dict[str, Any], confirmation_code: str) -> Any:
-        """Run the full analysis: propensity score matching, balance check, outcome model.
+        """Run the confirmed study: matching, balance check, outcome model, effect estimate.
 
-        Only for a study the user has confirmed: pass the confirmation_code that
-        check_study returned for this exact study. Returns the effect estimate
-        with its 95% CI and p-value, a plain-English interpretation, cohort
-        sizes, covariate balance and warnings.
+        Step 5 of the Cohort Studio workflow, only after the user has confirmed
+        the summary from check_study: pass that study and its confirmation_code.
+        Returns the effect (rate, odds or hazard ratio) with its 95% CI and
+        p-value, cohort sizes, covariate balance, warnings and a plain-English
+        interpretation. Report these to the user; do not recompute them with SQL.
         """
         spec = _study(study)
         if isinstance(spec, dict):
