@@ -46,6 +46,7 @@ agent ── MCP ──> app/mcp_protocol.py          MCP over HTTP (JSON-RPC), 
 | `backend/app/seed/synthetic.py` | The synthetic data: a planted effect (rate ratio 0.70) and a planted selection bias |
 | `notebooks/load_synthetic_data.py` | Databricks notebook that writes the synthetic tables into a catalog and schema |
 | `docs/databricks-app.md` | Loading the data, deploying, connecting agents, moving to Healix |
+| `docs/genie-evaluation.md` | How Genie One uses the tools, before and after the fixes |
 
 Lines that change in another workspace (e.g. Healix) are marked `HEALIX`.
 
