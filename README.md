@@ -5,6 +5,7 @@ Code, the Databricks AI Playground) design and run observational cohort
 studies with a fixed, tested method, asking the user before they assume.
 
 - The server and how it works: [`cohort-studio-app/`](cohort-studio-app/README.md)
+- How Genie One uses the tools (evaluation): [`cohort-studio-app/docs/genie-evaluation.md`](cohort-studio-app/docs/genie-evaluation.md)
 - Loading the data, deploying on Databricks and connecting agents: [`cohort-studio-app/docs/databricks-app.md`](cohort-studio-app/docs/databricks-app.md)
 
 `main` holds only what runs on Databricks: the MCP server, the Databricks
