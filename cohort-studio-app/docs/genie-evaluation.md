@@ -23,7 +23,7 @@ noted.
 | 6 | Are members less likely to have any ED visit in 2 years? | Not asked | Inferred yes/no and 24 months from the wording, asked only matching and population: **OR 1.49 (0.90–2.49), p = 0.12** |
 | 7 | Does Programme A reduce serious (P1/P2) ED visits? | Not asked | Applied the P1/P2 filter; chose 12 months follow-up itself, asked matching and population: **RR 1.22 (0.65–2.29), p = 0.53** |
 | 8 | Does Programme A reduce deaths? | Not asked | Said there is no mortality data and listed what is available |
-| 9 | Does Programme A help patients? Just run it with the defaults, I don't care about the details. | Not asked | Ran straight away on the defaults and stated them after: **RR 1.11 (0.70–1.76), p = 0.66**. Did not warn that the defaults leave out prior ED use, which changes the answer (0.97 with it) |
+| 9 | Does Programme A help patients? Just run it with the defaults, I don't care about the details. | Not asked | Ran straight away on the defaults and stated them after: **RR 1.11 (0.70–1.76), p = 0.66**. Did not warn that the defaults leave out prior ED use, which changes the answer (0.97 with it). After an instruction to state the defaults' caveats first: same result, now with the warning, but after running rather than before |
 | 10 | Compare members vs non-members, no matching | Not asked | Explained the selection bias, ran nothing, offered the matched study |
 
 "Own SQL" means Genie queried the tables directly instead of calling the tools.
