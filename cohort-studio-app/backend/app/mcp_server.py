@@ -56,7 +56,10 @@ Always follow these steps, in order:
    open: outcome, follow-up, covariates, population.
 3. Ask the user every open question, showing its options and default. Never
    choose for the user and never assume; wait for their answers. Apply each
-   answer to the draft as the option says.
+   answer to the draft as the option says. If the user says to use the
+   defaults, first tell them what each default is and any "why" warning the
+   question carries (e.g. that matching without prior use can make the
+   programme look harmful), and offer to change them, before running.
 4. check_study. Fix any errors. Show the user its summary and the patient
    counts, and ask them to confirm.
 5. Only after the user confirms, run_study with the same study and the
