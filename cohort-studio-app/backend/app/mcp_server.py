@@ -22,14 +22,14 @@ import hmac
 import logging
 from typing import Any
 
-from mcp.server.mcpserver import MCPServer
-from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import ValidationError
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from app import __version__
 from app.analysis.validation import issues_from_pydantic
 from app.core.exceptions import AnalysisError, DataSourceError, StudyError
 from app.core.jsonsafe import clean
+from app.mcp_protocol import McpServer
 from app.schemas.study import StudySpec
 from app.services.clarify import confirmation_code as study_code
 from app.services.clarify import review, summary
@@ -77,8 +77,11 @@ def _failure(e: Exception) -> dict[str, Any]:
     raise e
 
 
-def build_mcp(service: StudyService) -> MCPServer:
-    mcp: MCPServer = MCPServer("cohort-studio", instructions=INSTRUCTIONS)
+STUDY = {"type": "object", "additionalProperties": True, "description": "A StudySpec, as JSON"}
+
+
+def build_mcp(service: StudyService) -> McpServer:
+    mcp = McpServer("cohort-studio", __version__, INSTRUCTIONS)
 
     @mcp.tool()
     def describe_data() -> Any:
@@ -92,7 +95,7 @@ def build_mcp(service: StudyService) -> MCPServer:
         except Exception as e:
             return _failure(e)
 
-    @mcp.tool()
+    @mcp.tool({"source": {"type": "string"}, "dimension": {"type": "string"}})
     def list_values(source: str, dimension: str) -> dict[str, Any]:
         """Every allowed value of one filter.
 
@@ -105,7 +108,7 @@ def build_mcp(service: StudyService) -> MCPServer:
         except Exception as e:
             return _failure(e)
 
-    @mcp.tool()
+    @mcp.tool({"study": STUDY})
     def review_study(study: dict[str, Any]) -> Any:
         """List what a draft study still leaves open, as questions to ask the user.
 
@@ -124,7 +127,7 @@ def build_mcp(service: StudyService) -> MCPServer:
         except Exception as e:
             return _failure(e)
 
-    @mcp.tool()
+    @mcp.tool({"study": STUDY})
     def check_study(study: dict[str, Any]) -> Any:
         """Validate a study definition and count the patients left after each eligibility step.
 
@@ -154,7 +157,7 @@ def build_mcp(service: StudyService) -> MCPServer:
         except Exception as e:
             return _failure(e)
 
-    @mcp.tool()
+    @mcp.tool({"study": STUDY, "confirmation_code": {"type": "string"}})
     def run_study(study: dict[str, Any], confirmation_code: str) -> Any:
         """Run the full analysis: propensity score matching, balance check, outcome model.
 
@@ -230,18 +233,10 @@ class TrailingSlash:
         await self.app(scope, receive, send)
 
 
-def mcp_asgi_app(mcp: MCPServer, token: str | None) -> ASGIApp:
+def mcp_asgi_app(mcp: McpServer, token: str | None) -> ASGIApp:
     """The MCP endpoint as an app to mount at /mcp.
 
-    Stateless and JSON responses, so it runs behind any load balancer. The
-    host check is off because the service sits behind a proxy with its own
-    domain; the bearer token (or the platform's sign-in, when token is None)
-    is what protects it.
+    Stateless, with JSON responses, so it runs behind any load balancer. The
+    bearer token (or the platform's sign-in, when token is None) protects it.
     """
-    app = mcp.streamable_http_app(
-        streamable_http_path="/",
-        stateless_http=True,
-        json_response=True,
-        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
-    )
-    return app if token is None else BearerAuth(app, token)
+    return mcp if token is None else BearerAuth(mcp, token)

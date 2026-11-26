@@ -98,7 +98,7 @@ a summary to confirm, and only then call `run_study`.
 
 | Symptom | Cause |
 | --- | --- |
-| Deploy fails installing packages | The workspace can't reach PyPI: add the internal mirror as `--index-url` in `requirements.txt`, and check the mirror allows every package (e.g. `mcp`). |
+| Deploy fails installing packages | The workspace can't reach PyPI: add the internal mirror as `--index-url` in `requirements.txt`, and check the mirror allows every package in it. |
 | HTTP 503 "App Not Available" | The app is stopped (Free Edition stops idle apps): Start it. |
 | HTTP 401 from Unity Gateway | The caller service principal lacks **Can Use** on the app. |
 | "Failed to generate OAuth token" in an agent | The platform's sign-in between agent and app; retry, or reconnect the connector. |

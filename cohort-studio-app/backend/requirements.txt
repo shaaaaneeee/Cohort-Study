@@ -6,7 +6,6 @@
 # (in the Healix copy only; don't commit internal URLs to GitHub).
 fastapi==0.162.0
 uvicorn==0.54.0
-mcp==2.3.0
 pydantic==2.14.1
 pydantic-settings==2.16.1
 PyYAML==6.0.3

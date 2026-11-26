@@ -43,7 +43,8 @@ def run_analysis(table: pd.DataFrame, spec: StudySpec) -> dict:
                         measure, estimate, ci_low, ci_high, p_value, and
                         dispersion (counts) or ph_p_value (Cox)
         cohort          patients per group before and after matching
-        events          patients with the outcome per group, in the matched cohort
+        patients_with_outcome  patients with the outcome (at least one event)
+                        per group, in the matched cohort; not a count of events
         balance         one row per covariate from matching.balance()
         issues          warnings about the data and the fit
         interpretation  one paragraph in plain English
@@ -151,7 +152,7 @@ def run_analysis(table: pd.DataFrame, spec: StudySpec) -> dict:
             "control_matched": matched_control,
             "matched": pairs is not None,
         },
-        "events": events,
+        "patients_with_outcome": events,
         "balance": balance_rows,
         "issues": issues,
         "interpretation": interpret(model, outcome, pairs is not None),
