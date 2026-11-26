@@ -539,10 +539,11 @@ def check_events_per_covariate(events: int, parameters: int, minimum: float = 10
         issue(
             "warning",
             "low_events_per_covariate",
-            f"{events} outcome events for {parameters} model coefficients is "
-            f"{per_parameter:.1f} per coefficient, below the usual minimum of "
-            f"{minimum:g}. Estimates may be unstable; consider fewer covariates or "
-            f"a longer follow-up window.",
+            f"{events} informative patients (patients with the outcome, or "
+            f"without it when those are fewer; not a count of events) for "
+            f"{parameters} model coefficients is {per_parameter:.1f} per "
+            f"coefficient, below the usual minimum of {minimum:g}. Estimates may "
+            f"be unstable; consider fewer covariates or a longer follow-up window.",
         )
     ]
 
