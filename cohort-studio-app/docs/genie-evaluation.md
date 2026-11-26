@@ -17,7 +17,7 @@ noted.
 |---|---|---|---|
 | 1 | Does Programme A help patients? | Own SQL, before/after: "Yes, 22% fewer visits" | Asked 4 questions, confirmed, ran: **RR 0.97 (0.65–1.46), p = 0.90**; matches the reference |
 | 2 | Does Programme A reduce ED visits for diabetics? | Own SQL, before/after: "Yes, 15.9% fewer" | Took "diabetics" as the population, asked the rest: 47 members, **RR 1.17 (0.60–2.29), p = 0.65**, small-sample warning |
-| 3 | Is Programme A worth it for the elderly? | Own SQL, unmatched: "Yes, worth it (28% fewer)" | Not rerun individually |
+| 3 | Is Programme A worth it for the elderly? | Own SQL, unmatched: "Yes, worth it (28% fewer)" | Took "elderly" as 65+ without asking, asked the rest: 86 vs 86 matched, **RR 1.15 (0.74–1.80), p = 0.53**, "not worth it" for ED visits |
 | 4 | Do Programme A members get admitted less? | Own SQL, before/after + chi-square: "no evidence" | Not rerun individually |
 | 5 | Does Programme A delay the first ED visit? | Own SQL, unmatched survival curves | Cox model: **HR 0.91 (0.58–1.42), p = 0.68**, proportional hazards met (asked in a shared chat, so it reused earlier answers) |
 | 8 | Does Programme A reduce deaths? | Not asked | Said there is no mortality data and listed what is available |
@@ -35,6 +35,8 @@ noted.
 
 ## Notes
 
+- Genie fills a population from the question's wording ("elderly" → 65+) without
+  asking; reasonable here, but worth checking in the summary it shows.
 - Several questions in one message make Genie choose the answers itself
   (the defaults), so test the asking step with one question per new chat.
   Without prior ED use in the matching, question 1 gives RR 1.11 instead of 0.97.
