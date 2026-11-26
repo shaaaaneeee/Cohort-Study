@@ -1,0 +1,19 @@
+# Python packages for the Databricks App. Databricks installs these with pip
+# (Python 3.11) when the app is deployed. Exact pins, all supporting 3.11+.
+#
+# HEALIX: if packages must come from an internal PyPI mirror, add its index as
+# the first line here, e.g.  --index-url https://<mirror>/simple
+# (in the Healix copy only; don't commit internal URLs to GitHub).
+fastapi==0.162.0
+uvicorn==0.54.0
+mcp==2.3.0
+pydantic==2.14.1
+pydantic-settings==2.16.1
+PyYAML==6.0.3
+numpy==2.4.6
+pandas==2.3.3
+scipy==1.17.1
+statsmodels==0.15.0
+lifelines==0.30.3
+databricks-sql-connector[pyarrow]==4.9.0
+databricks-sdk==0.167.0

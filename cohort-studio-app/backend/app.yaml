@@ -1,9 +1,8 @@
 # Runs the MCP server as a Databricks App, serving the study tools to Genie
 # One, Genie Code and the AI Playground at /mcp. Steps: docs/databricks-app.md.
 #
-# There is deliberately no requirements.txt in this folder: without one,
-# Databricks installs from pyproject.toml + uv.lock with Python 3.13.
-command: ["uv", "run", "--frozen", "--no-dev", "python", "-m", "app"]
+# Databricks installs the packages in requirements.txt with pip (Python 3.11).
+command: ["python", "-m", "app"]
 
 env:
   # The SQL warehouse added to the app as a resource with the key "sql-warehouse".
